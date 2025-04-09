@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { downloadCSV } from '../utils/exportUtils'; // Import the utility
 
 // Define interfaces for data structure
 interface SpendingDataPoint {
@@ -77,7 +78,16 @@ const SpendingComparisonChart: React.FC<ComparisonChartProps> = () => {
 
     return (
         <div style={{ padding: '20px' }}>
-            <h2>Spending Comparison</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <h2>Spending Comparison</h2>
+                 <button 
+                    onClick={() => downloadCSV(combinedData, `spending-comparison-${comparisonType}-${startDate?.toISOString().split('T')[0]}-to-${endDate?.toISOString().split('T')[0]}.csv`)} 
+                    style={{ padding: '5px 10px' }} 
+                    disabled={!combinedData || combinedData.length === 0}
+                >
+                     Export CSV
+                 </button>
+            </div>
             <div style={{ marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'center' }}>
                 <div>
                     <label style={{ marginRight: '5px' }}>Start Date:</label>

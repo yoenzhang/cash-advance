@@ -9,6 +9,7 @@ import {
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import SpendingComparisonChart from '../components/SpendingComparisonChart'; // Add import here
+import { downloadCSV } from '../utils/exportUtils'; // Import the CSV utility
 
 // Types for our data
 interface SpendingData {
@@ -850,23 +851,32 @@ const Insights: React.FC = () => {
       <div className="charts-section">
         {/* Spending Trends Chart */}
         <div className="card mt-4">
-          <div className="chart-header">
-            <h2>Spending Trends {spendingChartType === 'heatmap' ? '(Daily Intensity)' : `(by ${aggregationPeriod.replace('ly', '')})`}</h2>
-            <div className="chart-controls">
-              <label htmlFor="spending-chart-type">Chart Type: </label>
-              <select
-                id="spending-chart-type"
-                value={spendingChartType}
-                onChange={(e) => setSpendingChartType(e.target.value as ChartType)}
-                className="chart-type-dropdown"
-              >
-                <option value="bar">Bar Chart</option>
-                <option value="line">Line Chart</option>
-                <option value="area">Area Chart</option>
-                <option value="composed">Composed Chart</option>
-                <option value="heatmap">Heat Map</option> 
-              </select>
-            </div>
+          <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+             <h2>Spending Trends {spendingChartType === 'heatmap' ? '(Daily Intensity)' : `(by ${aggregationPeriod.replace('ly', '')})`}</h2>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <div className="chart-controls">
+                  <label htmlFor="spending-chart-type">Chart Type: </label>
+                  <select
+                    id="spending-chart-type"
+                    value={spendingChartType}
+                    onChange={(e) => setSpendingChartType(e.target.value as ChartType)}
+                    className="chart-type-dropdown"
+                  >
+                    <option value="bar">Bar Chart</option>
+                    <option value="line">Line Chart</option>
+                    <option value="area">Area Chart</option>
+                    <option value="composed">Composed Chart</option>
+                    <option value="heatmap">Heat Map</option> 
+                  </select>
+                </div>
+                 <button 
+                    onClick={() => downloadCSV(aggregatedSpendingData, `spending-trends-${aggregationPeriod}-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.csv`)} 
+                    style={{ padding: '5px 10px' }} 
+                    disabled={!aggregatedSpendingData || aggregatedSpendingData.length === 0}
+                 >
+                     Export CSV
+                 </button>
+             </div>
           </div>
           <div className="chart-container">
             {renderSpendingChart()}
@@ -879,15 +889,24 @@ const Insights: React.FC = () => {
         
         {/* Spending by Category Chart */}
         <div className="card mt-4">
-          <div className="chart-header">
+          <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2>Spending by Category</h2>
-            <div className="chart-controls">
-              <label htmlFor="category-chart-type">Chart Type: </label>
-              <select id="category-chart-type" value={categoryChartType} onChange={(e) => setCategoryChartType(e.target.value as ChartType)} className="chart-type-dropdown">
-                <option value="pie">Pie Chart</option>
-                <option value="bar">Bar Chart</option>
-              </select>
-            </div>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <div className="chart-controls">
+                  <label htmlFor="category-chart-type">Chart Type: </label>
+                  <select id="category-chart-type" value={categoryChartType} onChange={(e) => setCategoryChartType(e.target.value as ChartType)} className="chart-type-dropdown">
+                    <option value="pie">Pie Chart</option>
+                    <option value="bar">Bar Chart</option>
+                  </select>
+                </div>
+                 <button 
+                    onClick={() => downloadCSV(categoryData, `category-spending-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.csv`)} 
+                    style={{ padding: '5px 10px' }} 
+                    disabled={!categoryData || categoryData.length === 0}
+                >
+                     Export CSV
+                 </button>
+             </div>
           </div>
            <p className="chart-hint">(Categories shown for the entire selected period)</p>
           <div className="chart-container">
@@ -897,16 +916,25 @@ const Insights: React.FC = () => {
         
         {/* Repayment Performance Chart */}
         <div className="card mt-4">
-          <div className="chart-header">
+          <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2>Repayment Performance {`(by ${aggregationPeriod.replace('ly', '')})`}</h2>
-            <div className="chart-controls">
-              <label htmlFor="repayment-chart-type">Chart Type: </label>
-              <select id="repayment-chart-type" value={repaymentChartType} onChange={(e) => setRepaymentChartType(e.target.value as ChartType)} className="chart-type-dropdown">
-                <option value="bar">Bar Chart</option>
-                <option value="line">Line Chart</option>
-                <option value="area">Area Chart</option>
-              </select>
-            </div>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <div className="chart-controls">
+                  <label htmlFor="repayment-chart-type">Chart Type: </label>
+                  <select id="repayment-chart-type" value={repaymentChartType} onChange={(e) => setRepaymentChartType(e.target.value as ChartType)} className="chart-type-dropdown">
+                    <option value="bar">Bar Chart</option>
+                    <option value="line">Line Chart</option>
+                    <option value="area">Area Chart</option>
+                  </select>
+                </div>
+                 <button 
+                    onClick={() => downloadCSV(aggregatedRepaymentData, `repayment-performance-${aggregationPeriod}-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.csv`)} 
+                    style={{ padding: '5px 10px' }} 
+                    disabled={!aggregatedRepaymentData || aggregatedRepaymentData.length === 0}
+                 >
+                     Export CSV
+                 </button>
+             </div>
           </div>
           <div className="chart-container">
             {renderRepaymentChart()}
@@ -916,21 +944,31 @@ const Insights: React.FC = () => {
       
       {/* Monthly Spending Breakdown Section */}
       <div className="card mt-5">
-        <div className="monthly-breakdown-header">
-          <h2>Breakdown for {MONTHS[endDate.getMonth()]} {endDate.getFullYear()}</h2> 
-           <div className="chart-controls"> 
-             <label htmlFor="monthly-chart-type">Chart Type: </label>
-             <select id="monthly-chart-type" value={monthlyChartType} onChange={(e) => setMonthlyChartType(e.target.value as ChartType)} className="chart-type-dropdown">
-               <option value="pie">Donut Chart</option>
-               <option value="bar">Bar Chart</option>
-             </select>
-           </div>
+        <div className="monthly-breakdown-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+           <h2>Breakdown for {MONTHS[endDate.getMonth()]} {endDate.getFullYear()}</h2> 
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+               <div className="chart-controls"> 
+                 <label htmlFor="monthly-chart-type">Chart Type: </label>
+                 <select id="monthly-chart-type" value={monthlyChartType} onChange={(e) => setMonthlyChartType(e.target.value as ChartType)} className="chart-type-dropdown">
+                   <option value="pie">Donut Chart</option>
+                   <option value="bar">Bar Chart</option>
+                 </select>
+               </div>
+                {monthlyBreakdown.length > 0 && (
+                    <button 
+                        onClick={() => downloadCSV(monthlyBreakdown, `monthly-breakdown-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.csv`)} 
+                        style={{ padding: '5px 10px' }}
+                    >
+                        Export CSV
+                    </button>
+                )}
+            </div>
         </div>
         
         <div className="monthly-breakdown-content">
           <div className="monthly-charts">
             <div className="monthly-pie-chart"> 
-              {renderMonthlyChart()}
+               {renderMonthlyChart()}
             </div>
             
             <div className="monthly-breakdown-table">
@@ -948,12 +986,6 @@ const Insights: React.FC = () => {
         </div>
       </div>
       
-      {/* Spending Heatmap Section */}
-      <div className="chart-section">
-        <h3>Spending Heatmap ({getDateRangeLabel(startDate, endDate)})</h3>
-        {/* ... heatmap rendering logic ... */}
-      </div>
-
       {/* Spending Comparison Section - Add the new component here */}
       <div className="chart-section">
          <SpendingComparisonChart />
