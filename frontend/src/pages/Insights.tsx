@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import SpendingComparisonChart from '../components/SpendingComparisonChart'; // Add import here
 
 // Types for our data
 interface SpendingData {
@@ -947,6 +948,17 @@ const Insights: React.FC = () => {
         </div>
       </div>
       
+      {/* Spending Heatmap Section */}
+      <div className="chart-section">
+        <h3>Spending Heatmap ({getDateRangeLabel(startDate, endDate)})</h3>
+        {/* ... heatmap rendering logic ... */}
+      </div>
+
+      {/* Spending Comparison Section - Add the new component here */}
+      <div className="chart-section">
+         <SpendingComparisonChart />
+      </div>
+
       {/* --- Advanced Metrics Section --- */}
       {selectedAdvancedMetrics.length > 0 && (
           <div className="advanced-metrics-section mt-5">
