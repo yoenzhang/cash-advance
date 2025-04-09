@@ -3,7 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useApplication } from '../context/ApplicationContext';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart, Scatter
+  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart, 
+  ScatterChart, Scatter, ZAxis // Import ScatterChart related components
 } from 'recharts';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -49,24 +50,42 @@ interface DailySpendingDetail {
   amount: number;
 }
 
-type ChartType = 'bar' | 'line' | 'pie' | 'area' | 'composed';
+// Data for Heatmap
+interface HeatmapDataPoint {
+  week: number; // Week number within the range/year
+  dayOfWeek: number; // 0 (Sun) to 6 (Sat)
+  amount: number;
+  dateString: string; // For tooltip
+}
+
+type ChartType = 'bar' | 'line' | 'pie' | 'area' | 'composed' | 'heatmap'; // Add heatmap
 type AggregationPeriod = 'monthly' | 'weekly' | 'daily';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A569BD'];
+// Heatmap colors - light to dark
+const HEATMAP_COLORS = ['#cce5ff', '#99caff', '#66b0ff', '#3395ff', '#007bff']; 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Helper to get week number within the year
+const getWeekOfYear = (date: Date): number => {
+  const startOfYear = new Date(date.getFullYear(), 0, 1);
+  const diff = date.getTime() - startOfYear.getTime();
+  return Math.ceil((diff / (1000 * 60 * 60 * 24)) / 7);
+};
 
 // Helper to format date for aggregation keys
 const formatDateKey = (date: Date, period: AggregationPeriod): string => {
   const year = date.getFullYear();
   const month = date.getMonth();
   const day = date.getDate();
-  const week = Math.ceil(day / 7);
+  const week = getWeekOfYear(date); // Use week of year
 
   switch (period) {
     case 'daily':
       return date.toISOString().split('T')[0];
     case 'weekly':
-      return `${year}-W${week}`;
+      return `${year}-W${week.toString().padStart(2, '0')}`;
     case 'monthly':
     default:
       return `${MONTHS[month]} ${year}`;
@@ -93,6 +112,7 @@ const Insights: React.FC = () => {
   const [aggregatedRepaymentData, setAggregatedRepaymentData] = useState<AggregatedRepaymentData[]>([]);
   const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
   const [monthlyBreakdown, setMonthlyBreakdown] = useState<MonthlyBreakdown[]>([]);
+  const [heatmapData, setHeatmapData] = useState<HeatmapDataPoint[]>([]); // State for heatmap data
   
   const [creditUtilization, setCreditUtilization] = useState<number>(0);
   const [averageRepaymentTime, setAverageRepaymentTime] = useState<number>(0);
@@ -101,7 +121,7 @@ const Insights: React.FC = () => {
   // Date Range State
   const [startDate, setStartDate] = useState<Date>(() => {
     const date = new Date();
-    date.setMonth(date.getMonth() - 6);
+    date.setMonth(date.getMonth() - 3); // Default to last 3 months for heatmap visibility
     date.setDate(1);
     return date;
   });
@@ -122,10 +142,21 @@ const Insights: React.FC = () => {
   const [cumulativeSpendingData, setCumulativeSpendingData] = useState<AggregatedSpendingData[]>([]);
 
   // Custom tooltip component for charts
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label, coordinate }: any) => {
     if (active && payload && payload.length) {
+      // Specific tooltip for heatmap
+      if (payload[0].payload.dateString) { 
+        const point = payload[0].payload as HeatmapDataPoint;
+        return (
+          <div className="custom-tooltip">
+             {point.dateString}: ${point.amount.toLocaleString()}
+          </div>
+        );
+      }
+      
+      // Existing tooltip logic
       const value = payload[0].value;
-      const name = payload[0].name;
+      const name = payload[0].name; 
       let displayValue = typeof value === 'number' ? `$${value.toLocaleString()}` : value;
       
       let text = `${label} : ${displayValue}`;
@@ -136,8 +167,7 @@ const Insights: React.FC = () => {
       }
 
       return (
-        <div className="custom-tooltip" dangerouslySetInnerHTML={{ __html: text }}>
-        </div>
+        <div className="custom-tooltip" dangerouslySetInnerHTML={{ __html: text }}></div>
       );
     }
     return null;
@@ -154,16 +184,20 @@ const Insights: React.FC = () => {
     const generatedRepayment: RepaymentData[] = [];
 
     for (let d = new Date(oneYearAgo); d <= today; d.setDate(d.getDate() + 1)) {
+      // Generate daily spending (make weekends potentially lower)
+      const dayOfWeek = d.getDay();
+      const baseAmount = (dayOfWeek === 0 || dayOfWeek === 6) ? 30 : 50;
       generatedSpending.push({
         date: new Date(d),
-        amount: 50 + Math.floor(Math.random() * 150)
+        amount: baseAmount + Math.floor(Math.random() * 100) 
       });
 
-      if (Math.random() > 0.7) {
+      // Generate daily repayment stats 
+      if (Math.random() > 0.7) { 
          generatedRepayment.push({
            date: new Date(d),
-           onTime: Math.random() > 0.2 ? Math.floor(Math.random() * 2) + 1 : 0,
-           late: Math.random() > 0.8 ? 1 : 0
+           onTime: Math.random() > 0.2 ? Math.floor(Math.random() * 2) + 1 : 0, 
+           late: Math.random() > 0.8 ? 1 : 0 
          });
       }
     }
@@ -171,21 +205,23 @@ const Insights: React.FC = () => {
     setRawSpendingData(generatedSpending);
     setRawRepaymentData(generatedRepayment);
 
-    const demoCategoryData: CategoryData[] = [
-      { name: 'Groceries', value: Math.floor(Math.random() * 1000) + 500 },
-      { name: 'Housing', value: Math.floor(Math.random() * 1500) + 1000 },
-      { name: 'Transport', value: Math.floor(Math.random() * 500) + 200 },
-      { name: 'Utilities', value: Math.floor(Math.random() * 400) + 150 },
-      { name: 'Entertainment', value: Math.floor(Math.random() * 300) + 100 }
-    ];
-    setCategoryData(demoCategoryData);
+    // Set initial category data 
+     const demoCategoryData: CategoryData[] = [
+       { name: 'Groceries', value: Math.floor(Math.random() * 1000) + 500 },
+       { name: 'Housing', value: Math.floor(Math.random() * 1500) + 1000 },
+       { name: 'Transport', value: Math.floor(Math.random() * 500) + 200 },
+       { name: 'Utilities', value: Math.floor(Math.random() * 400) + 150 },
+       { name: 'Entertainment', value: Math.floor(Math.random() * 300) + 100 }
+     ];
+     setCategoryData(demoCategoryData);
 
+    // Set other metrics 
     setCreditUtilization(60 + Math.floor(Math.random() * 15)); 
     setAverageRepaymentTime(15 + Math.floor(Math.random() * 10)); 
-    setTotalAdvances(applications?.length || 0);
+    setTotalAdvances(applications?.length || 0); 
 
     setLoading(false);
-  }, [applications]);
+  }, [applications]); 
 
   // Aggregate data based on date range and period
   useEffect(() => {
@@ -193,9 +229,11 @@ const Insights: React.FC = () => {
 
     setLoading(true);
 
+    // Filter raw data based on selected date range
     const filteredSpending = rawSpendingData.filter(d => d.date >= startDate && d.date <= endDate);
     const filteredRepayment = rawRepaymentData.filter(d => d.date >= startDate && d.date <= endDate);
 
+    // Aggregate spending (Daily, Weekly, Monthly)
     const spendingMap = new Map<string, number>();
     filteredSpending.forEach(item => {
       const key = formatDateKey(item.date, aggregationPeriod);
@@ -203,6 +241,7 @@ const Insights: React.FC = () => {
     });
     const aggSpending: AggregatedSpendingData[] = Array.from(spendingMap, ([period, amount]) => ({ period, amount }));
     
+    // Aggregate repayment (Daily, Weekly, Monthly)
     const repaymentMap = new Map<string, { onTime: number, late: number }>();
      filteredRepayment.forEach(item => {
        const key = formatDateKey(item.date, aggregationPeriod);
@@ -214,12 +253,25 @@ const Insights: React.FC = () => {
      });
      const aggRepayment: AggregatedRepaymentData[] = Array.from(repaymentMap, ([period, data]) => ({ period, ...data }));
 
+    // Sort aggregated data 
     aggSpending.sort((a, b) => a.period.localeCompare(b.period)); 
     aggRepayment.sort((a, b) => a.period.localeCompare(b.period));
 
     setAggregatedSpendingData(aggSpending);
     setAggregatedRepaymentData(aggRepayment);
 
+    // Process data for Heatmap (always based on daily from filtered range)
+    const heatmapPoints: HeatmapDataPoint[] = filteredSpending.map(item => {
+      return {
+        week: getWeekOfYear(item.date),
+        dayOfWeek: item.date.getDay(), // 0 = Sunday
+        amount: item.amount,
+        dateString: item.date.toISOString().split('T')[0]
+      };
+    });
+    setHeatmapData(heatmapPoints);
+
+    // Calculate cumulative spending based on the *newly aggregated* data
     let cumulativeAmount = 0;
     const cumulativeData = aggSpending.map(item => {
       cumulativeAmount += item.amount;
@@ -230,17 +282,18 @@ const Insights: React.FC = () => {
     });
     setCumulativeSpendingData(cumulativeData);
     
+    // Update monthly breakdown based on the *last month* in the range for simplicity
     const lastMonthInBreakdown = endDate.getMonth();
-    updateMonthlyBreakdown(MONTHS[lastMonthInBreakdown]);
+    updateMonthlyBreakdown(MONTHS[lastMonthInBreakdown]); 
 
     setLoading(false);
-    setDrillDownData(null);
+    setDrillDownData(null); 
 
   }, [rawSpendingData, rawRepaymentData, startDate, endDate, aggregationPeriod]);
 
-  // Update monthly breakdown when month concept changes (or for drill-down maybe)
-  const updateMonthlyBreakdown = (monthKey: string) => {
-    const seed = monthKey.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  // Update monthly breakdown 
+  const updateMonthlyBreakdown = (monthKey: string) => { 
+    const seed = monthKey.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0); 
     const randomFactor = (seed % 100) / 100; 
 
     const demoMonthlyBreakdown: MonthlyBreakdown[] = [
@@ -263,11 +316,13 @@ const Insights: React.FC = () => {
   // Handle Date Range Change
   const handleDateChange = (dates: [Date | null, Date | null]) => {
     const [start, end] = dates;
-    if (start && end) {
+    if (start && end && start <= end) { // Add validation: start <= end
       setStartDate(start);
       setEndDate(end);
-    } else if (start) {
+    } else if (start) { 
         setStartDate(start);
+        // If only start is selected, maybe set end to start?
+        // setEndDate(start); 
     }
   };
   
@@ -287,15 +342,15 @@ const Insights: React.FC = () => {
     const clickedPeriod = data.activePayload[0].payload.period;
     setDrillDownPeriod(clickedPeriod);
 
+    // Simulate fetching/filtering detailed data for the clicked period
     let detailedData: DailySpendingDetail[] = [];
-    
-    const periodParts = clickedPeriod.split(' ');
     
     rawSpendingData.forEach(item => {
       let itemPeriodKey: string | null = null;
       try {
-         itemPeriodKey = formatDateKey(item.date, aggregationPeriod);
-      } catch (e) { /* handle potential date errors */ }
+         // *** Important: Use the SAME aggregation period as the chart was based on ***
+         itemPeriodKey = formatDateKey(item.date, aggregationPeriod); 
+      } catch (e) { console.error("Error formatting date key:", e); }
 
       if (itemPeriodKey === clickedPeriod) {
         const descriptions = ["Coffee Shop", "Grocery Store", "Online Purchase", "Restaurant", "Gas Station", "Bill Payment"];
@@ -308,7 +363,6 @@ const Insights: React.FC = () => {
     });
 
     detailedData.sort((a, b) => a.date.localeCompare(b.date));
-
     setDrillDownData(detailedData);
 
     const drillDownElement = document.getElementById('drill-down-section');
@@ -316,19 +370,15 @@ const Insights: React.FC = () => {
   };
 
   // Render chart based on selected type
-  const renderSpendingChart = () => {
-    const dataToUse = aggregatedSpendingData;
-    const cumulativeData = cumulativeSpendingData;
+  const renderSpendingChart = (): React.ReactElement => {
+    const dataToUse = aggregatedSpendingData; 
+    const cumulativeData = cumulativeSpendingData; 
 
     switch (spendingChartType) {
       case 'bar':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={dataToUse}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              onClick={handleBarClick}
-            >
+            <BarChart data={dataToUse} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} onClick={handleBarClick}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="period" />
               <YAxis tickFormatter={(value) => `$${value}`} />
@@ -340,54 +390,31 @@ const Insights: React.FC = () => {
       case 'line':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart
-              data={dataToUse}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-            >
+            <LineChart data={dataToUse} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="period" />
               <YAxis tickFormatter={(value) => `$${value}`} />
               <Tooltip content={<CustomTooltip />} />
-              <Line 
-                type="monotone" 
-                dataKey="amount" 
-                stroke="#4361ee" 
-                strokeWidth={2}
-                activeDot={{ r: 8, style: { cursor: 'pointer' } }}
-              />
+              <Line type="monotone" dataKey="amount" stroke="#4361ee" strokeWidth={2} activeDot={{ r: 8, style: { cursor: 'pointer' } }}/>
             </LineChart>
           </ResponsiveContainer>
         );
       case 'area':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart
-              data={dataToUse}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-            >
+            <AreaChart data={dataToUse} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="period" />
               <YAxis tickFormatter={(value) => `$${value}`} />
               <Tooltip content={<CustomTooltip />} />
-              <Area 
-                type="monotone" 
-                dataKey="amount" 
-                stroke="#4361ee"
-                fill="#4361ee" 
-                fillOpacity={0.3}
-                activeDot={{ r: 6, style: { cursor: 'pointer' } }}
-              />
+              <Area type="monotone" dataKey="amount" stroke="#4361ee" fill="#4361ee" fillOpacity={0.3} activeDot={{ r: 6, style: { cursor: 'pointer' } }}/>
             </AreaChart>
           </ResponsiveContainer>
         );
       case 'composed':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart
-              data={dataToUse}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              onClick={handleBarClick}
-            >
+            <ComposedChart data={dataToUse} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} onClick={handleBarClick}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="period" />
               <YAxis yAxisId="left" tickFormatter={(value) => `$${value}`} />
@@ -395,20 +422,74 @@ const Insights: React.FC = () => {
               <Tooltip content={<CustomTooltip />} />
               <Legend />
               <Bar dataKey="amount" yAxisId="left" barSize={20} fill="#4361ee" name="Spending" cursor="pointer" />
-              <Line 
-                type="monotone" 
-                yAxisId="right"
-                data={cumulativeData}
-                dataKey="amount" 
-                stroke="#ff7300"
-                name="Cumulative"
-                strokeWidth={2}
-                dot={false}
-              />
+              <Line type="monotone" yAxisId="right" data={cumulativeData} dataKey="amount" stroke="#ff7300" name="Cumulative" strokeWidth={2} dot={false}/>
             </ComposedChart>
           </ResponsiveContainer>
         );
-      default:
+      case 'heatmap':
+          // Calculate domain for heatmap color scale
+          const amounts = heatmapData.map(p => p.amount);
+          const minAmount = Math.min(...amounts, 0);
+          const maxAmount = Math.max(...amounts, 1); // Ensure max is at least 1
+          const weekDomain = [Math.min(...heatmapData.map(d => d.week)), Math.max(...heatmapData.map(d => d.week))];
+
+          return (
+            <ResponsiveContainer width="100%" height={200}> 
+              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <CartesianGrid />
+                <XAxis 
+                  type="number" 
+                  dataKey="week" 
+                  name="Week" 
+                  domain={['dataMin - 1', 'dataMax + 1']} // Add padding to week axis
+                  tickFormatter={(weekNum) => `W${weekNum}`}
+                  interval={0} // Show all ticks potentially
+                  angle={-30} // Angle ticks if needed
+                  dx={-5}     // Adjust position
+                  dy={10}
+                  tickCount={15} // Limit tick count
+                  allowDuplicatedCategory={false} // Avoid duplicate week labels
+                />
+                <YAxis 
+                  type="number" 
+                  dataKey="dayOfWeek"
+                  name="Day" 
+                  domain={[-1, 7]} // Pad domain for better spacing
+                  tickFormatter={(dayNum) => DAYS_OF_WEEK[dayNum] || ''} 
+                  ticks={[0, 1, 2, 3, 4, 5, 6]} // Explicitly set ticks
+                  interval={0}
+                />
+                <ZAxis 
+                  type="number" 
+                  dataKey="amount" 
+                  name="Spending"
+                  domain={[minAmount, maxAmount]} 
+                />
+                <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip />} />
+                <Scatter name="Daily Spending" data={heatmapData} shape="square">
+                    {heatmapData.map((entry, index) => {
+                      // Determine fill color based on amount and ZAxis range/colors
+                      const ratio = maxAmount > minAmount ? (entry.amount - minAmount) / (maxAmount - minAmount) : 0;
+                      const colorIndex = Math.min(HEATMAP_COLORS.length - 1, Math.floor(ratio * HEATMAP_COLORS.length));
+                      const fillColor = HEATMAP_COLORS[colorIndex];
+                      return <Cell key={`cell-${index}`} fill={fillColor} />;
+                    })}
+                </Scatter>
+                 {/* Optional: Add Legend for heatmap colors */}
+                 <Legend 
+                   verticalAlign="bottom" 
+                   layout="horizontal"
+                   align="center"
+                   payload={HEATMAP_COLORS.map((color, index) => ({
+                     value: `Level ${index + 1}`,
+                     type: 'square',
+                     color: color,
+                   }))}
+                 />
+              </ScatterChart>
+            </ResponsiveContainer>
+          );
+      default: 
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={dataToUse} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} onClick={handleBarClick}>
@@ -429,16 +510,7 @@ const Insights: React.FC = () => {
         return (
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
-              <Pie
-                data={categoryData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-              >
+              <Pie data={categoryData} cx="50%" cy="50%" labelLine={false} outerRadius={100} fill="#8884d8" dataKey="value" label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>
                 {categoryData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
@@ -451,20 +523,12 @@ const Insights: React.FC = () => {
       case 'bar':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={categoryData}
-              layout="vertical"
-              margin={{ top: 20, right: 30, left: 90, bottom: 5 }}
-            >
+            <BarChart data={categoryData} layout="vertical" margin={{ top: 20, right: 30, left: 90, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" tickFormatter={(value) => `$${value}`} />
               <YAxis type="category" dataKey="name" width={80} />
               <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
-              <Bar 
-                dataKey="value" 
-                fill="#8884d8"
-                radius={[0, 4, 4, 0]}
-              >
+              <Bar dataKey="value" fill="#8884d8" radius={[0, 4, 4, 0]}>
                 {categoryData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
@@ -472,7 +536,7 @@ const Insights: React.FC = () => {
             </BarChart>
           </ResponsiveContainer>
         );
-      default:
+      default: 
         return renderCategoryChart();
     }
   };
@@ -482,10 +546,7 @@ const Insights: React.FC = () => {
       case 'bar':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={aggregatedRepaymentData}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-            >
+            <BarChart data={aggregatedRepaymentData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="period" />
               <YAxis allowDecimals={false}/>
@@ -499,10 +560,7 @@ const Insights: React.FC = () => {
       case 'line':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart
-              data={aggregatedRepaymentData}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-            >
+            <LineChart data={aggregatedRepaymentData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="period" />
               <YAxis allowDecimals={false}/>
@@ -516,10 +574,7 @@ const Insights: React.FC = () => {
       case 'area':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart
-              data={aggregatedRepaymentData}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-            >
+            <AreaChart data={aggregatedRepaymentData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="period" />
               <YAxis allowDecimals={false}/>
@@ -530,7 +585,7 @@ const Insights: React.FC = () => {
             </AreaChart>
           </ResponsiveContainer>
         );
-      default:
+      default: 
         return renderRepaymentChart();
     }
   };
@@ -541,16 +596,7 @@ const Insights: React.FC = () => {
         return (
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
-              <Pie
-                data={monthlyBreakdown}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                fill="#8884d8"
-                paddingAngle={5}
-                dataKey="amount"
-              >
+              <Pie data={monthlyBreakdown} cx="50%" cy="50%" innerRadius={60} outerRadius={80} fill="#8884d8" paddingAngle={5} dataKey="amount">
                 {monthlyBreakdown.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
@@ -562,11 +608,7 @@ const Insights: React.FC = () => {
       case 'bar':
         return (
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart
-              data={monthlyBreakdown}
-              layout="vertical"
-              margin={{ top: 5, right: 30, left: 90, bottom: 5 }}
-            >
+            <BarChart data={monthlyBreakdown} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}> 
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" tickFormatter={(value) => `$${value}`} />
               <YAxis type="category" dataKey="category" width={80} />
@@ -579,12 +621,12 @@ const Insights: React.FC = () => {
             </BarChart>
           </ResponsiveContainer>
         );
-      default:
+      default: 
         return renderMonthlyChart();
     }
   };
 
-  if (loading && (!aggregatedSpendingData.length || !aggregatedRepaymentData.length)) {
+  if (loading && (!aggregatedSpendingData.length || !aggregatedRepaymentData.length || !heatmapData.length)) {
     return <div className="loading">Loading insights...</div>;
   }
 
@@ -593,98 +635,93 @@ const Insights: React.FC = () => {
       <h1>Financial Insights</h1>
       <p className="subtitle">Track your financial performance and spending patterns</p>
       
-      <div className="card date-range-card">
-        <div className="date-range-controls">
-          <div className="date-picker-container">
-            <label htmlFor="date-range">Select Date Range:</label>
-            <DatePicker
-              selectsRange={true}
-              startDate={startDate}
-              endDate={endDate}
-              onChange={handleDateChange}
-              isClearable={false}
-              maxDate={new Date()}
-              dateFormat="yyyy/MM/dd"
-              className="date-picker-input"
-              wrapperClassName="date-picker-wrapper"
-            />
-          </div>
-          <div className="aggregation-selector-container">
-            <label htmlFor="aggregation-period">Aggregate By:</label>
-            <select 
-              id="aggregation-period" 
-              value={aggregationPeriod} 
-              onChange={handleAggregationChange}
-              className="aggregation-dropdown"
-            >
-              <option value="monthly">Monthly</option>
-              <option value="weekly">Weekly</option>
-              <option value="daily">Daily</option>
-            </select>
-          </div>
-        </div>
-        <p className="selected-range-label">Showing data for: {getDateRangeLabel(startDate, endDate)}</p>
-      </div>
+      {/* Date Range Selector */}
+       <div className="card date-range-card">
+         <div className="date-range-controls">
+           <div className="date-picker-container">
+             <label htmlFor="date-range">Select Date Range:</label>
+             <DatePicker
+               selectsRange={true}
+               startDate={startDate}
+               endDate={endDate}
+               onChange={handleDateChange}
+               isClearable={false} 
+               maxDate={new Date()} 
+               dateFormat="yyyy/MM/dd"
+               className="date-picker-input" 
+               wrapperClassName="date-picker-wrapper"
+             />
+           </div>
+           <div className="aggregation-selector-container">
+             <label htmlFor="aggregation-period">Aggregate Charts By:</label>
+             <select 
+               id="aggregation-period" 
+               value={aggregationPeriod} 
+               onChange={handleAggregationChange}
+               className="aggregation-dropdown"
+               disabled={spendingChartType === 'heatmap'} // Disable aggregation for heatmap
+             >
+               <option value="monthly">Monthly</option>
+               <option value="weekly">Weekly</option>
+               <option value="daily">Daily</option>
+             </select>
+           </div>
+         </div>
+         <p className="selected-range-label">Showing data for: {getDateRangeLabel(startDate, endDate)}</p>
+       </div>
 
+      {/* Key metrics cards */}
       <div className="insights-grid">
         <div className="card metric-card">
           <div className="card-title">Total Cash Advances</div>
-          <div className="metric-value">{totalAdvances}</div>
+          <div className="metric-value">{totalAdvances}</div> 
           <div className="card-subtitle">Lifetime total</div>
         </div>
         
         <div className="card metric-card">
-          <div className="card-title">Avg Spending / {aggregationPeriod.replace('ly', '')}</div>
+          <div className="card-title">Avg Spending / Day</div> 
+            {/* Changed to always show Daily Average for consistency */}
           <div className="metric-value">
-            ${(aggregatedSpendingData.reduce((sum, item) => sum + item.amount, 0) / (aggregatedSpendingData.length || 1)).toFixed(2)}
+            ${(rawSpendingData.filter(d => d.date >= startDate && d.date <= endDate).reduce((sum, item) => sum + item.amount, 0) / ((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24) + 1)).toFixed(2)}
           </div>
           <div className="card-subtitle">Selected period average</div>
         </div>
         
         <div className="card metric-card">
-          <div className="card-title">Total Spending</div>
-          <div className="metric-value">
-            ${aggregatedSpendingData.reduce((sum, item) => sum + item.amount, 0).toLocaleString()}
-          </div>
-          <div className="card-subtitle">In selected period</div>
+           <div className="card-title">Total Spending</div>
+           <div className="metric-value">
+             ${rawSpendingData.filter(d => d.date >= startDate && d.date <= endDate).reduce((sum, item) => sum + item.amount, 0).toLocaleString()}
+           </div>
+           <div className="card-subtitle">In selected period</div>
         </div>
       </div>
       
+      {/* Drill Down Section */}
       {drillDownData && drillDownPeriod && (
         <div id="drill-down-section" className="card mt-4 drill-down-card">
           <h2>Spending Details for {drillDownPeriod}</h2>
           {drillDownData.length > 0 ? (
             <table className="drill-down-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Description</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
+              <thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead>
               <tbody>
                 {drillDownData.map((item, index) => (
-                  <tr key={index}>
-                    <td>{item.date}</td>
-                    <td>{item.description}</td>
-                    <td>${item.amount.toFixed(2)}</td>
-                  </tr>
+                  <tr key={index}><td>{item.date}</td><td>{item.description}</td><td>${item.amount.toFixed(2)}</td></tr>
                 ))}
               </tbody>
             </table>
           ) : (
             <p>No detailed spending data available for this period.</p>
           )}
-           <button onClick={() => { setDrillDownData(null); setDrillDownPeriod(null); }} className="close-drilldown-btn">
-             Close Details
-           </button>
+           <button onClick={() => { setDrillDownData(null); setDrillDownPeriod(null); }} className="close-drilldown-btn">Close Details</button>
         </div>
       )}
 
+      {/* Top Charts Section */}
       <div className="charts-section">
+        {/* Spending Trends Chart */}
         <div className="card mt-4">
           <div className="chart-header">
-            <h2>Spending Trends</h2>
+            <h2>Spending Trends {spendingChartType === 'heatmap' ? '(Daily Intensity)' : `(by ${aggregationPeriod.replace('ly', '')})`}</h2>
             <div className="chart-controls">
               <label htmlFor="spending-chart-type">Chart Type: </label>
               <select
@@ -697,26 +734,26 @@ const Insights: React.FC = () => {
                 <option value="line">Line Chart</option>
                 <option value="area">Area Chart</option>
                 <option value="composed">Composed Chart</option>
+                <option value="heatmap">Heat Map</option> 
               </select>
             </div>
           </div>
           <div className="chart-container">
             {renderSpendingChart()}
-            {spendingChartType === 'bar' && <p className="chart-hint">Click on a bar to see daily details.</p>}
+            {(spendingChartType === 'bar' && aggregationPeriod !== 'daily') && 
+              <p className="chart-hint">Click on a bar to see daily details for that {aggregationPeriod.replace('ly', '')}.</p>}
+            {spendingChartType === 'heatmap' && 
+              <p className="chart-hint">Shows daily spending intensity. Darker squares mean higher spending.</p>}
           </div>
         </div>
         
+        {/* Spending by Category Chart */}
         <div className="card mt-4">
           <div className="chart-header">
             <h2>Spending by Category</h2>
             <div className="chart-controls">
               <label htmlFor="category-chart-type">Chart Type: </label>
-              <select
-                id="category-chart-type"
-                value={categoryChartType}
-                onChange={(e) => setCategoryChartType(e.target.value as ChartType)}
-                className="chart-type-dropdown"
-              >
+              <select id="category-chart-type" value={categoryChartType} onChange={(e) => setCategoryChartType(e.target.value as ChartType)} className="chart-type-dropdown">
                 <option value="pie">Pie Chart</option>
                 <option value="bar">Bar Chart</option>
               </select>
@@ -728,17 +765,13 @@ const Insights: React.FC = () => {
           </div>
         </div>
         
+        {/* Repayment Performance Chart */}
         <div className="card mt-4">
           <div className="chart-header">
-            <h2>Repayment Performance</h2>
+            <h2>Repayment Performance {`(by ${aggregationPeriod.replace('ly', '')})`}</h2>
             <div className="chart-controls">
               <label htmlFor="repayment-chart-type">Chart Type: </label>
-              <select
-                id="repayment-chart-type"
-                value={repaymentChartType}
-                onChange={(e) => setRepaymentChartType(e.target.value as ChartType)}
-                className="chart-type-dropdown"
-              >
+              <select id="repayment-chart-type" value={repaymentChartType} onChange={(e) => setRepaymentChartType(e.target.value as ChartType)} className="chart-type-dropdown">
                 <option value="bar">Bar Chart</option>
                 <option value="line">Line Chart</option>
                 <option value="area">Area Chart</option>
@@ -751,67 +784,41 @@ const Insights: React.FC = () => {
         </div>
       </div>
       
+      {/* Monthly Spending Breakdown Section */}
       <div className="card mt-5">
         <div className="monthly-breakdown-header">
-          <h2>Breakdown for {MONTHS[endDate.getMonth()]} {endDate.getFullYear()}</h2>
-          <div className="chart-controls">
-            <label htmlFor="monthly-chart-type">Chart Type: </label>
-            <select
-              id="monthly-chart-type"
-              value={monthlyChartType}
-              onChange={(e) => setMonthlyChartType(e.target.value as ChartType)}
-              className="chart-type-dropdown"
-            >
-              <option value="pie">Donut Chart</option>
-              <option value="bar">Bar Chart</option>
-            </select>
-          </div>
+          <h2>Breakdown for {MONTHS[endDate.getMonth()]} {endDate.getFullYear()}</h2> 
+           <div className="chart-controls"> 
+             <label htmlFor="monthly-chart-type">Chart Type: </label>
+             <select id="monthly-chart-type" value={monthlyChartType} onChange={(e) => setMonthlyChartType(e.target.value as ChartType)} className="chart-type-dropdown">
+               <option value="pie">Donut Chart</option>
+               <option value="bar">Bar Chart</option>
+             </select>
+           </div>
         </div>
         
         <div className="monthly-breakdown-content">
           <div className="monthly-charts">
-            <div className="monthly-pie-chart">
+            <div className="monthly-pie-chart"> 
               {renderMonthlyChart()}
             </div>
             
             <div className="monthly-breakdown-table">
               <table className="breakdown-table">
-                <thead>
-                  <tr>
-                    <th>Category</th>
-                    <th>Amount</th>
-                    <th>Percentage</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>Category</th><th>Amount</th><th>Percentage</th></tr></thead>
                 <tbody>
                   {monthlyBreakdown.map((item, index) => (
-                    <tr key={index}>
-                      <td>
-                        <span className="category-color" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
-                        {item.category}
-                      </td>
-                      <td>${item.amount.toLocaleString()}</td>
-                      <td>{item.percentage}%</td>
-                    </tr>
+                    <tr key={index}><td><span className="category-color" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>{item.category}</td><td>${item.amount.toLocaleString()}</td><td>{item.percentage}%</td></tr>
                   ))}
                 </tbody>
-                <tfoot>
-                  <tr>
-                    <td><strong>Total</strong></td>
-                    <td>
-                      <strong>
-                        ${monthlyBreakdown.reduce((sum, item) => sum + item.amount, 0).toLocaleString()}
-                      </strong>
-                    </td>
-                    <td>{monthlyBreakdown.reduce((sum, item) => sum + item.percentage, 0) > 0 ? '100%' : '0%'}</td>
-                  </tr>
-                </tfoot>
+                <tfoot><tr><td><strong>Total</strong></td><td><strong>${monthlyBreakdown.reduce((sum, item) => sum + item.amount, 0).toLocaleString()}</strong></td><td>{monthlyBreakdown.reduce((sum, item) => sum + item.percentage, 0) > 0 ? '100%' : '0%'}</td></tr></tfoot>
               </table>
             </div>
           </div>
         </div>
       </div>
       
+      {/* Financial Tips */}
       <div className="card mt-4">
         <h2>Personalized Tips</h2>
         <ul className="tips-list">
