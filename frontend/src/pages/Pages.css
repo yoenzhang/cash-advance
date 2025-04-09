@@ -144,6 +144,108 @@
   color: var(--gray-color);
 }
 
+/* Date Range Card */
+.date-range-card {
+  background-color: #f9f9f9; /* Slightly different background */
+  padding: 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.date-range-controls {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.date-picker-container,
+.aggregation-selector-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.date-picker-container label,
+.aggregation-selector-container label {
+  font-weight: 500;
+  color: var(--dark-color);
+}
+
+/* react-datepicker custom styling */
+.date-picker-wrapper {
+  display: inline-block;
+}
+
+.date-picker-input {
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  background-color: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--transition);
+  width: 220px; /* Adjust width as needed */
+}
+
+.date-picker-input:hover,
+.date-picker-input:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+/* Optional: Style the calendar popup */
+.react-datepicker-popper {
+  z-index: 10; 
+}
+.react-datepicker {
+  font-size: 0.9rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.react-datepicker__header {
+  background-color: var(--primary-light);
+  border-bottom: 1px solid var(--primary-color);
+}
+.react-datepicker__current-month,
+.react-datepicker__day-name {
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+.react-datepicker__day--selected {
+  background-color: var(--primary-color);
+  color: white;
+}
+.react-datepicker__day--in-selecting-range,
+.react-datepicker__day--in-range {
+  background-color: rgba(67, 97, 238, 0.2); /* Light primary */
+}
+
+.aggregation-dropdown {
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  background-color: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.aggregation-dropdown:hover,
+.aggregation-dropdown:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+.selected-range-label {
+  font-size: 0.9rem;
+  color: var(--gray-color);
+  margin: 0;
+  font-style: italic;
+}
+
 /* Chart Styles */
 .charts-section {
   display: grid;
@@ -170,6 +272,11 @@
   gap: 0.5rem;
 }
 
+.chart-controls label {
+  font-size: 0.9rem;
+  color: var(--dark-color);
+}
+
 .chart-type-dropdown {
   padding: 0.4rem 0.8rem;
   border-radius: 6px;
@@ -188,6 +295,14 @@
 
 .ml-3 {
   margin-left: 1rem;
+}
+
+.chart-hint {
+  font-size: 0.85rem;
+  color: var(--gray-color);
+  margin-top: -0.5rem; 
+  margin-bottom: 0.5rem;
+  text-align: center;
 }
 
 .card {
@@ -218,72 +333,19 @@
   margin-top: 2rem;
 }
 
-/* Basic chart bar styles (fallback) */
-.chart-bar-container {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  height: 200px;
-  margin-top: 2rem;
-}
-
-.chart-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
-}
-
-.chart-bar {
-  width: 30px;
-  border-radius: 4px 4px 0 0;
-  background-color: var(--primary-color);
-  transition: var(--transition);
-}
-
-.bar-group {
-  display: flex;
-  gap: 2px;
-}
-
-.chart-bar.on-time {
-  background-color: var(--secondary-color);
-}
-
-.chart-bar.late {
-  background-color: var(--danger-color);
-}
-
-.chart-label {
-  margin-top: 0.5rem;
-  font-weight: 500;
-}
-
-.chart-legend {
-  display: flex;
-  justify-content: center;
-  gap: 2rem;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.legend-color {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-}
-
-.legend-color.on-time {
-  background-color: var(--secondary-color);
-}
-
-.legend-color.late {
-  background-color: var(--danger-color);
-}
+/* Basic chart bar styles (fallback) - Might be less relevant now */
+.chart-bar-container { /* ... kept for potential reference ... */ }
+.chart-item { /* ... */ }
+.chart-bar { /* ... */ }
+.bar-group { /* ... */ }
+.chart-bar.on-time { /* ... */ }
+.chart-bar.late { /* ... */ }
+.chart-label { /* ... */ }
+.chart-legend { /* ... */ }
+.legend-item { /* ... */ }
+.legend-color { /* ... */ }
+.legend-color.on-time { /* ... */ }
+.legend-color.late { /* ... */ }
 
 /* Monthly Breakdown Styles */
 .monthly-breakdown-header {
@@ -293,20 +355,20 @@
   margin-bottom: 1.5rem;
 }
 
-.monthly-controls {
+.monthly-controls { /* Now only contains chart type selector */
   display: flex;
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
 }
 
-.month-selector {
+.month-selector { /* Kept for structure, but might be removed if month dropdown is fully gone */
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.month-dropdown {
+.month-dropdown { /* Kept for styling reference if needed elsewhere */
   padding: 0.5rem 1rem;
   border-radius: 6px;
   border: 1px solid #e0e0e0;
@@ -333,7 +395,7 @@
   align-items: center;
 }
 
-.monthly-pie-chart {
+.monthly-pie-chart { 
   height: 250px;
 }
 
@@ -378,12 +440,63 @@
   border-radius: 6px;
   padding: 0.75rem 1rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-size: 0.9rem;
+  color: var(--dark-color);
 }
 
-.custom-tooltip .label {
+/* .custom-tooltip .label { /* Removed as using dangerouslySetInnerHTML */ */
+
+/* Drill Down Section Styles */
+.drill-down-card {
+  background-color: #f0f3ff; /* Light blue background */
+  border: 1px solid #c3daff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  position: relative; /* For close button positioning */
+}
+
+.drill-down-card h2 {
+  color: var(--primary-dark);
+  margin-bottom: 1rem;
+}
+
+.drill-down-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.drill-down-table th,
+.drill-down-table td {
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid #d5e2ff;
+}
+
+.drill-down-table th {
+  font-weight: 600;
+  background-color: #e6ecff;
+}
+
+.drill-down-table tbody tr:nth-child(even) {
+  background-color: #f8faff;
+}
+
+.close-drilldown-btn {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--transition);
   font-weight: 500;
-  color: var(--dark-color);
-  margin: 0;
+  display: block; /* Center button */
+  margin: 1rem auto 0 auto;
+}
+
+.close-drilldown-btn:hover {
+  background-color: var(--primary-dark);
 }
 
 /* Tips Styles */
@@ -457,7 +570,7 @@
     grid-template-columns: 1fr;
   }
   
-  .chart-bar {
+  .chart-bar { /* Kept for reference */
     width: 20px;
   }
   
@@ -479,12 +592,22 @@
   }
   
   .chart-type-dropdown {
-    width: 70%;
+    flex-grow: 1; /* Allow dropdown to take available space */
+  }
+  
+  .date-range-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  
+  .date-picker-input {
+    width: 100%;
   }
 }
 
 @media (max-width: 576px) {
-  .chart-bar-container {
+  .chart-bar-container { /* Kept for reference */
     height: 160px;
   }
   
@@ -493,7 +616,9 @@
   }
   
   .breakdown-table th,
-  .breakdown-table td {
+  .breakdown-table td,
+  .drill-down-table th,
+  .drill-down-table td {
     padding: 0.5rem;
     font-size: 0.9rem;
   }

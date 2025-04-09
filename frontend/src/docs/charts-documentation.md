@@ -4,29 +4,45 @@ This document provides an overview of the charting functionality implemented in 
 
 ## Overview
 
-The Insights page uses [Recharts](https://recharts.org) to visualize financial data with various chart types:
+The Insights page uses [Recharts](https://recharts.org) to visualize financial data with various chart types and interactive features:
 
-- Bar Charts
-- Line Charts
-- Pie Charts
-- Area Charts
-- Composed Charts (combining multiple chart types)
-
-Each chart section allows users to switch between different visualization types using dropdown selectors.
+- **Multiple Chart Types:** Bar, Line, Pie, Area, Composed charts.
+- **Chart Type Toggling:** Dropdowns allow users to switch between visualization types for each metric.
+- **Custom Date Range Filtering:** A date range picker allows users to select custom start and end dates.
+- **Data Aggregation:** Data can be aggregated daily, weekly, or monthly based on user selection.
+- **Drill-Down:** Clicking on specific data points (currently on the Spending Trends bar chart) reveals more granular details for that period.
 
 ## Data Structure
 
-The charts use the following data structures:
-
-### Spending Data
+### Raw Data (Generated Fake Data)
 ```typescript
 interface SpendingData {
-  month: string;
+  date: Date; 
   amount: number;
+}
+
+interface RepaymentData {
+  date: Date; 
+  onTime: number;
+  late: number;
 }
 ```
 
-### Category Data
+### Aggregated Data (Used by Charts)
+```typescript
+interface AggregatedSpendingData {
+  period: string; // e.g., 'Jan 2023', '2023-W5', '2023-01-25'
+  amount: number;
+}
+
+interface AggregatedRepaymentData {
+  period: string;
+  onTime: number;
+  late: number;
+}
+```
+
+### Category Data (Currently Period-Agnostic)
 ```typescript
 interface CategoryData {
   name: string;
@@ -34,7 +50,7 @@ interface CategoryData {
 }
 ```
 
-### Monthly Breakdown
+### Monthly Breakdown (For the specific monthly section)
 ```typescript
 interface MonthlyBreakdown {
   category: string;
@@ -43,72 +59,84 @@ interface MonthlyBreakdown {
 }
 ```
 
-### Repayment Data
+### Drill-Down Data
 ```typescript
-interface RepaymentData {
-  month: string;
-  onTime: number;
-  late: number;
+interface DailySpendingDetail {
+  date: string;
+  description: string;
+  amount: number;
 }
 ```
 
-## Chart Implementation
+## Key Features Implementation
 
-Each chart is implemented as a separate rendering function that returns the appropriate chart type based on the selected option:
+### Date Range Filtering
 
-- `renderSpendingChart()`
-- `renderCategoryChart()`
-- `renderRepaymentChart()`
-- `renderMonthlyChart()`
+- Uses the `react-datepicker` library.
+- `startDate` and `endDate` state variables control the selected range.
+- `handleDateChange` function updates the state.
+- An `useEffect` hook filters the `rawSpendingData` and `rawRepaymentData` based on the selected `startDate` and `endDate`.
 
-These functions use switch statements to return the appropriate chart component based on the selected chart type.
+### Data Aggregation
 
-## How to Update Chart Data
+- The `aggregationPeriod` state (`daily`, `weekly`, `monthly`) controls how data is grouped.
+- The `formatDateKey` helper function generates unique keys for each period based on the selected aggregation.
+- The `useEffect` hook aggregates the filtered raw data into `aggregatedSpendingData` and `aggregatedRepaymentData` using `Map` objects.
 
-Currently, the charts use mock data. To replace with real data from your API:
+### Drill-Down
 
-1. Locate the `useEffect` hook where the data is initialized
-2. Replace the mock data creation with API calls:
+- Implemented via the `handleBarClick` function attached to the `onClick` event of the Spending Trends `BarChart`.
+- When a bar is clicked, it identifies the `clickedPeriod`.
+- It then filters the `rawSpendingData` to find daily entries matching that period using the `formatDateKey` function.
+- Fake descriptions are added for demonstration.
+- The results are stored in the `drillDownData` state, which conditionally renders a details table.
 
-```typescript
-useEffect(() => {
-  setLoading(true);
-  
-  // Replace this with real API calls
-  const fetchData = async () => {
-    try {
-      const spendingResponse = await api.getSpendingData();
-      const categoryResponse = await api.getCategoryData();
-      const repaymentResponse = await api.getRepaymentData();
-      
-      setSpendingData(spendingResponse.data);
-      setCategoryData(categoryResponse.data);
-      setRepaymentData(repaymentResponse.data);
-      
-      // Calculate cumulative data if needed
-      let cumulativeAmount = 0;
-      const cumulativeData = spendingResponse.data.map(item => {
-        cumulativeAmount += item.amount;
-        return {
-          month: item.month,
-          amount: cumulativeAmount
-        };
-      });
-      setCumulativeSpendingData(cumulativeData);
-      
-      // Other state updates...
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching chart data:', error);
-      setLoading(false);
-    }
-  };
-  
-  fetchData();
-}, []);
-```
+### Chart Implementation
 
-## How to Add a New Chart Type
+- Render functions (`renderSpendingChart`, etc.) display charts based on aggregated data and selected chart types.
+- The Spending Trends chart uses `aggregatedSpendingData` and `cumulativeSpendingData`.
+- The Repayment chart uses `aggregatedRepaymentData`.
+- Category and Monthly Breakdown charts currently use data that is less dependent on the date range/aggregation period in this example, but could be adapted.
+
+## How to Update Data (Replace Fake Data)
+
+1.  **Fetch Raw Data:** Modify the initial `useEffect` hook (the one depending on `[applications]`) to fetch *raw, granular* (ideally daily) data from your API instead of generating fake data. Fetch a sufficiently large range initially (e.g., last year) to support flexible date filtering on the client-side.
+    ```typescript
+    useEffect(() => {
+      setLoading(true);
+      const fetchData = async () => {
+        try {
+          // Fetch raw spending and repayment data (e.g., daily transactions for the last year)
+          const rawSpendingResponse = await api.getRawSpendingData({ /* params like userId */ });
+          const rawRepaymentResponse = await api.getRawRepaymentData({ /* params */ });
+    
+          // Parse dates into Date objects
+          const parsedSpending = rawSpendingResponse.data.map(item => ({ ...item, date: new Date(item.date) }));
+          const parsedRepayment = rawRepaymentResponse.data.map(item => ({ ...item, date: new Date(item.date) }));
+    
+          setRawSpendingData(parsedSpending);
+          setRawRepaymentData(parsedRepayment);
+          
+          // Fetch or calculate other static data like categories, total advances etc.
+          // ... 
+    
+          setLoading(false);
+        } catch (error) {
+          console.error('Error fetching initial data:', error);
+          setLoading(false);
+        }
+      };
+      fetchData();
+    }, [applications]); // Dependency on user/auth context might be needed too
+    ```
+
+2.  **Filtering & Aggregation:** The second `useEffect` hook (depending on `[rawSpendingData, ..., aggregationPeriod]`) should largely remain the same. It takes the raw data, filters it by the user-selected `startDate` and `endDate`, and then aggregates it based on `aggregationPeriod`.
+
+3.  **Drill-Down Data:** The `handleBarClick` function might need adjustment. Instead of filtering client-side `rawSpendingData` again, you might:
+    *   Fetch detailed data specifically for the `clickedPeriod` from the API on demand.
+    *   Or, ensure the initially fetched `rawSpendingData` contains sufficient detail (like descriptions) if you prefer client-side filtering for drill-down.
+
+## How to Add/Modify Chart Types
 
 To add a new chart type:
 
@@ -194,24 +222,18 @@ const [newMetricChartType, setNewMetricChartType] = useState<ChartType>('bar');
 
 ## Custom Styling
 
-Chart colors and styles can be customized:
-
-- The `COLORS` array defines the color palette for pie and bar charts
-- Each chart component accepts style props for customization
-- For more extensive styling, update the CSS in `Pages.css`
+- Date picker is styled using `.date-picker-*` classes and overrides for `.react-datepicker*`.
+- Drill-down section uses `.drill-down-*` classes.
+- General chart styling is in `Pages.css`.
 
 ## Responsive Considerations
 
-All charts use the `<ResponsiveContainer>` component to ensure they resize properly on different screen sizes. When adding new charts, make sure to:
-
-1. Wrap your chart with `<ResponsiveContainer>`
-2. Test on different screen sizes
-3. Update the responsive CSS media queries if needed
+- Date range controls and chart controls now have responsive styles for smaller screens.
+- The drill-down table also has basic responsive padding adjustments.
+- Ensure new elements are tested across various screen sizes.
 
 ## Performance Optimization
 
-If performance issues arise with multiple charts:
-
-1. Consider lazy loading charts that are not immediately visible
-2. Implement pagination or filters to reduce the amount of data displayed at once
-3. Optimize data fetching to minimize API calls 
+- **Initial Load:** Fetching a large amount of raw data initially might be slow. Consider fetching only the default range (e.g., last 6 months) initially and fetching more historical data if the user selects an older date range.
+- **Re-aggregation:** Aggregation on the client-side is relatively fast for moderate datasets but could slow down with millions of raw data points. For very large datasets, consider performing aggregation on the backend based on the selected date range and period.
+- **Drill-Down:** Fetching drill-down details on demand from the API is often more performant than loading all possible details upfront. 
