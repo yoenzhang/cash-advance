@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApplication } from '../context/ApplicationContext';
 import { 
@@ -58,6 +58,24 @@ interface HeatmapDataPoint {
   dateString: string; // For tooltip
 }
 
+// Define structure for advanced metric definitions
+interface AdvancedMetricDefinition {
+  key: string;
+  name: string;
+  description: string;
+  calculate: (data: MetricCalculationData) => number | null;
+  format: (value: number | null) => string;
+}
+
+// Data passed to metric calculation functions
+interface MetricCalculationData {
+  filteredSpending: SpendingData[];
+  aggregatedRepayment: AggregatedRepaymentData[];
+  categoryData: CategoryData[]; // Note: Currently period-agnostic
+  startDate: Date;
+  endDate: Date;
+}
+
 type ChartType = 'bar' | 'line' | 'pie' | 'area' | 'composed' | 'heatmap'; // Add heatmap
 type AggregationPeriod = 'monthly' | 'weekly' | 'daily';
 
@@ -66,6 +84,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A569BD'];
 const HEATMAP_COLORS = ['#cce5ff', '#99caff', '#66b0ff', '#3395ff', '#007bff']; 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const LOCALSTORAGE_METRICS_KEY = 'insightsAdvancedMetricsSelection';
 
 // Helper to get week number within the year
 const getWeekOfYear = (date: Date): number => {
@@ -97,6 +116,57 @@ const getDateRangeLabel = (start: Date, end: Date): string => {
   const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
   return `${start.toLocaleDateString(undefined, options)} - ${end.toLocaleDateString(undefined, options)}`;
 };
+
+// Available Advanced Metrics Definition
+const availableAdvancedMetrics: AdvancedMetricDefinition[] = [
+  {
+    key: 'avgTransactionValue',
+    name: 'Avg. Transaction Value',
+    description: 'Average amount spent per day within the period.',
+    calculate: ({ filteredSpending }) => {
+      if (!filteredSpending || filteredSpending.length === 0) return null;
+      const total = filteredSpending.reduce((sum, item) => sum + item.amount, 0);
+      const uniqueDays = new Set(filteredSpending.map(d => d.date.toDateString())).size;
+       return uniqueDays > 0 ? total / uniqueDays : null;
+    },
+    format: (value) => value !== null ? `$${value.toFixed(2)}` : 'N/A',
+  },
+  {
+    key: 'highestSpendingCategory',
+    name: 'Highest Spending Category',
+    description: 'The category with the most spending (based on overall category data).',
+    calculate: ({ categoryData }) => {
+       if (!categoryData || categoryData.length === 0) return null;
+       const highest = categoryData.reduce((max, item) => item.value > max.value ? item : max, categoryData[0]);
+       return highest.value;
+    },
+    format: (value) => value !== null ? `$${value.toLocaleString()}` : 'N/A', // Simplified format
+  },
+  {
+    key: 'latePaymentCount',
+    name: 'Late Payments',
+    description: 'Total number of late payments recorded in the period.',
+    calculate: ({ aggregatedRepayment }) => {
+      if (!aggregatedRepayment) return null;
+      return aggregatedRepayment.reduce((sum, item) => sum + item.late, 0);
+    },
+    format: (value) => value !== null ? `${value}` : 'N/A',
+  },
+   {
+     key: 'onTimeRepaymentRate',
+     name: 'On-Time Repayment Rate',
+     description: 'Percentage of repayments made on time in the period.',
+     calculate: ({ aggregatedRepayment }) => {
+       if (!aggregatedRepayment) return null;
+       const totalOnTime = aggregatedRepayment.reduce((sum, item) => sum + item.onTime, 0);
+       const totalLate = aggregatedRepayment.reduce((sum, item) => sum + item.late, 0);
+       const totalRepayments = totalOnTime + totalLate;
+       return totalRepayments > 0 ? (totalOnTime / totalRepayments) * 100 : null;
+     },
+     format: (value) => value !== null ? `${value.toFixed(1)}%` : 'N/A',
+   },
+  // Add more metrics here...
+];
 
 const Insights: React.FC = () => {
   const { user } = useAuth();
@@ -140,6 +210,35 @@ const Insights: React.FC = () => {
 
   // Calculate cumulative data for line charts
   const [cumulativeSpendingData, setCumulativeSpendingData] = useState<AggregatedSpendingData[]>([]);
+
+  // State for Advanced Metrics Selection
+  const [selectedAdvancedMetrics, setSelectedAdvancedMetrics] = useState<string[]>(() => {
+    try {
+      const savedSelection = localStorage.getItem(LOCALSTORAGE_METRICS_KEY);
+      return savedSelection ? JSON.parse(savedSelection) : []; // Default to empty array
+    } catch (error) {
+      console.error("Error reading metrics selection from localStorage:", error);
+      return [];
+    }
+  });
+
+  // Memoize filtered data to avoid recalculating on every render
+  const filteredSpending = useMemo(() => {
+      return rawSpendingData.filter(d => d.date >= startDate && d.date <= endDate);
+  }, [rawSpendingData, startDate, endDate]);
+
+  const filteredRepayment = useMemo(() => {
+      return rawRepaymentData.filter(d => d.date >= startDate && d.date <= endDate);
+  }, [rawRepaymentData, startDate, endDate]);
+
+  // Memoize the data object passed to metric calculations
+  const metricCalculationData = useMemo((): MetricCalculationData => ({
+      filteredSpending,
+      aggregatedRepayment: aggregatedRepaymentData, // Use the state here
+      categoryData, // Use category state
+      startDate,
+      endDate,
+  }), [filteredSpending, aggregatedRepaymentData, categoryData, startDate, endDate]);
 
   // Custom tooltip component for charts
   const CustomTooltip = ({ active, payload, label, coordinate }: any) => {
@@ -227,13 +326,22 @@ const Insights: React.FC = () => {
   useEffect(() => {
     if (!rawSpendingData.length && !rawRepaymentData.length) return;
 
-    setLoading(true);
+    // Use memoized filtered data
+    if (!filteredSpending.length && !filteredRepayment.length && (startDate !== endDate)) {
+       // If range is valid but no data, still proceed to set empty aggregates
+       setAggregatedSpendingData([]);
+       setAggregatedRepaymentData([]);
+       setHeatmapData([]);
+       setCumulativeSpendingData([]);
+       // Update monthly breakdown based on the *last month* in the range
+       updateMonthlyBreakdown(MONTHS[endDate.getMonth()]); 
+       setDrillDownData(null); 
+       return; // Skip aggregation if no data in range
+    }
 
-    // Filter raw data based on selected date range
-    const filteredSpending = rawSpendingData.filter(d => d.date >= startDate && d.date <= endDate);
-    const filteredRepayment = rawRepaymentData.filter(d => d.date >= startDate && d.date <= endDate);
+    setLoading(true); // May want finer-grained loading state later
 
-    // Aggregate spending (Daily, Weekly, Monthly)
+    // Aggregate spending
     const spendingMap = new Map<string, number>();
     filteredSpending.forEach(item => {
       const key = formatDateKey(item.date, aggregationPeriod);
@@ -241,7 +349,7 @@ const Insights: React.FC = () => {
     });
     const aggSpending: AggregatedSpendingData[] = Array.from(spendingMap, ([period, amount]) => ({ period, amount }));
     
-    // Aggregate repayment (Daily, Weekly, Monthly)
+    // Aggregate repayment 
     const repaymentMap = new Map<string, { onTime: number, late: number }>();
      filteredRepayment.forEach(item => {
        const key = formatDateKey(item.date, aggregationPeriod);
@@ -258,9 +366,9 @@ const Insights: React.FC = () => {
     aggRepayment.sort((a, b) => a.period.localeCompare(b.period));
 
     setAggregatedSpendingData(aggSpending);
-    setAggregatedRepaymentData(aggRepayment);
+    setAggregatedRepaymentData(aggRepayment); // Set state used by advanced metrics calculation
 
-    // Process data for Heatmap (always based on daily from filtered range)
+    // Process data for Heatmap
     const heatmapPoints: HeatmapDataPoint[] = filteredSpending.map(item => {
       return {
         week: getWeekOfYear(item.date),
@@ -271,7 +379,7 @@ const Insights: React.FC = () => {
     });
     setHeatmapData(heatmapPoints);
 
-    // Calculate cumulative spending based on the *newly aggregated* data
+    // Calculate cumulative spending
     let cumulativeAmount = 0;
     const cumulativeData = aggSpending.map(item => {
       cumulativeAmount += item.amount;
@@ -282,17 +390,16 @@ const Insights: React.FC = () => {
     });
     setCumulativeSpendingData(cumulativeData);
     
-    // Update monthly breakdown based on the *last month* in the range for simplicity
-    const lastMonthInBreakdown = endDate.getMonth();
-    updateMonthlyBreakdown(MONTHS[lastMonthInBreakdown]); 
+    // Update monthly breakdown based on the *last month* in the range
+    updateMonthlyBreakdown(MONTHS[endDate.getMonth()]); 
 
-    setLoading(false);
-    setDrillDownData(null); 
+    setLoading(false); 
+    if(drillDownData) setDrillDownData(null); // Clear drill-down when underlying data changes
 
-  }, [rawSpendingData, rawRepaymentData, startDate, endDate, aggregationPeriod]);
+  }, [filteredSpending, filteredRepayment, startDate, endDate, aggregationPeriod]); // Depend on memoized filtered data
 
   // Update monthly breakdown 
-  const updateMonthlyBreakdown = (monthKey: string) => { 
+  const updateMonthlyBreakdown = useCallback((monthKey: string) => { 
     const seed = monthKey.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0); 
     const randomFactor = (seed % 100) / 100; 
 
@@ -311,10 +418,10 @@ const Insights: React.FC = () => {
     }));
     
     setMonthlyBreakdown(withPercentages);
-  };
+  }, []);
 
   // Handle Date Range Change
-  const handleDateChange = (dates: [Date | null, Date | null]) => {
+  const handleDateChange = useCallback((dates: [Date | null, Date | null]) => {
     const [start, end] = dates;
     if (start && end && start <= end) { // Add validation: start <= end
       setStartDate(start);
@@ -324,15 +431,15 @@ const Insights: React.FC = () => {
         // If only start is selected, maybe set end to start?
         // setEndDate(start); 
     }
-  };
+  }, []);
   
   // Handle Aggregation Period Change
-   const handleAggregationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+   const handleAggregationChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
      setAggregationPeriod(e.target.value as AggregationPeriod);
-   };
+   }, []);
 
   // Handle Drill Down Click
-  const handleBarClick = (data: any, index: number) => {
+  const handleBarClick = useCallback((data: any, index: number) => {
     if (!data || !data.activePayload || !data.activePayload.length) {
       setDrillDownData(null);
       setDrillDownPeriod(null);
@@ -367,10 +474,26 @@ const Insights: React.FC = () => {
 
     const drillDownElement = document.getElementById('drill-down-section');
     drillDownElement?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, [rawSpendingData, aggregationPeriod]);
+
+  // Handle Toggling Advanced Metrics
+  const handleMetricToggle = useCallback((metricKey: string, isChecked: boolean) => {
+    const newSelection = isChecked
+      ? [...selectedAdvancedMetrics, metricKey]
+      : selectedAdvancedMetrics.filter(key => key !== metricKey);
+      
+    setSelectedAdvancedMetrics(newSelection);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem(LOCALSTORAGE_METRICS_KEY, JSON.stringify(newSelection));
+    } catch (error) {
+      console.error("Error saving metrics selection to localStorage:", error);
+    }
+  }, [selectedAdvancedMetrics]);
 
   // Render chart based on selected type
-  const renderSpendingChart = (): React.ReactElement => {
+  const renderSpendingChart = useCallback((): React.ReactElement => {
     const dataToUse = aggregatedSpendingData; 
     const cumulativeData = cumulativeSpendingData; 
 
@@ -502,9 +625,9 @@ const Insights: React.FC = () => {
           </ResponsiveContainer>
         );
     }
-  };
+  }, [aggregatedSpendingData, cumulativeSpendingData, heatmapData, spendingChartType, handleBarClick]);
   
-  const renderCategoryChart = (): React.ReactElement => {
+  const renderCategoryChart = useCallback((): React.ReactElement => {
     switch (categoryChartType) {
       case 'pie':
         return (
@@ -539,9 +662,9 @@ const Insights: React.FC = () => {
       default: 
         return renderCategoryChart();
     }
-  };
+  }, [categoryData, categoryChartType]);
   
-  const renderRepaymentChart = (): React.ReactElement => {
+  const renderRepaymentChart = useCallback((): React.ReactElement => {
     switch (repaymentChartType) {
       case 'bar':
         return (
@@ -588,9 +711,9 @@ const Insights: React.FC = () => {
       default: 
         return renderRepaymentChart();
     }
-  };
+  }, [aggregatedRepaymentData, repaymentChartType]);
   
-  const renderMonthlyChart = (): React.ReactElement => {
+  const renderMonthlyChart = useCallback((): React.ReactElement => {
     switch (monthlyChartType) {
       case 'pie':
         return (
@@ -624,7 +747,7 @@ const Insights: React.FC = () => {
       default: 
         return renderMonthlyChart();
     }
-  };
+  }, [monthlyBreakdown, monthlyChartType]);
 
   if (loading && (!aggregatedSpendingData.length || !aggregatedRepaymentData.length || !heatmapData.length)) {
     return <div className="loading">Loading insights...</div>;
@@ -679,10 +802,16 @@ const Insights: React.FC = () => {
         </div>
         
         <div className="card metric-card">
-          <div className="card-title">Avg Spending / Day</div> 
-            {/* Changed to always show Daily Average for consistency */}
+          <div className="card-title">
+            Avg Spending / {aggregationPeriod === 'daily' ? 'Day' : aggregationPeriod.replace('ly', '')}
+          </div>
           <div className="metric-value">
-            ${(rawSpendingData.filter(d => d.date >= startDate && d.date <= endDate).reduce((sum, item) => sum + item.amount, 0) / ((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24) + 1)).toFixed(2)}
+            $ 
+            {
+              aggregationPeriod === 'daily' 
+              ? (rawSpendingData.filter(d => d.date >= startDate && d.date <= endDate).reduce((sum, item) => sum + item.amount, 0) / (((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1)).toFixed(2)
+              : (aggregatedSpendingData.reduce((sum, item) => sum + item.amount, 0) / (aggregatedSpendingData.length || 1)).toFixed(2)
+            }
           </div>
           <div className="card-subtitle">Selected period average</div>
         </div>
@@ -690,7 +819,7 @@ const Insights: React.FC = () => {
         <div className="card metric-card">
            <div className="card-title">Total Spending</div>
            <div className="metric-value">
-             ${rawSpendingData.filter(d => d.date >= startDate && d.date <= endDate).reduce((sum, item) => sum + item.amount, 0).toLocaleString()}
+             ${filteredSpending.reduce((sum, item) => sum + item.amount, 0).toLocaleString()}
            </div>
            <div className="card-subtitle">In selected period</div>
         </div>
@@ -818,6 +947,56 @@ const Insights: React.FC = () => {
         </div>
       </div>
       
+      {/* --- Advanced Metrics Section --- */}
+      {selectedAdvancedMetrics.length > 0 && (
+          <div className="advanced-metrics-section mt-5">
+              <h2>Advanced Metrics</h2>
+              <div className="insights-grid advanced-metrics-grid">
+                  {availableAdvancedMetrics
+                      .filter(metric => selectedAdvancedMetrics.includes(metric.key))
+                      .map(metric => {
+                          const value = metric.calculate(metricCalculationData);
+                          let displayValue = metric.format(value);
+
+                          // Special formatting for highestSpendingCategory to include the name
+                          if (metric.key === 'highestSpendingCategory' && value !== null) {
+                             const category = categoryData.find((c: CategoryData) => c.value === value);
+                             displayValue = `${category?.name || 'Unknown'}: ${metric.format(value)}`;
+                          }
+
+                          return (
+                              <div key={metric.key} className="card metric-card advanced-metric-card">
+                                  <div className="card-title">{metric.name}</div>
+                                  <div className="metric-value">{displayValue}</div> 
+                                  <div className="card-subtitle">{metric.description}</div>
+                              </div>
+                          );
+                      })}
+              </div>
+          </div>
+      )}
+
+       {/* --- Metric Customization Panel --- */}
+       <div className="card mt-5 metric-settings-panel">
+           <h2>Customize Advanced Metrics</h2>
+           <p>Select the advanced metrics you want to display:</p>
+           <div className="metric-checkbox-group">
+               {availableAdvancedMetrics.map(metric => (
+                   <div key={metric.key} className="checkbox-item">
+                       <input
+                           type="checkbox"
+                           id={`metric-${metric.key}`}
+                           checked={selectedAdvancedMetrics.includes(metric.key)}
+                           onChange={(e) => handleMetricToggle(metric.key, e.target.checked)}
+                       />
+                       <label htmlFor={`metric-${metric.key}`}>
+                           <strong>{metric.name}</strong>: {metric.description}
+                       </label>
+                   </div>
+               ))}
+           </div>
+       </div>
+
       {/* Financial Tips */}
       <div className="card mt-4">
         <h2>Personalized Tips</h2>
