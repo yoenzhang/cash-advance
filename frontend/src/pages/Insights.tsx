@@ -4,11 +4,10 @@ import { useApplication } from '../context/ApplicationContext';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart, 
-  ScatterChart, Scatter, ZAxis // Import ScatterChart related components
+  ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea // Import ScatterChart related components
 } from 'recharts';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import SpendingComparisonChart from '../components/SpendingComparisonChart'; // Add import here
 import { downloadCSV } from '../utils/exportUtils'; // Import the CSV utility
 
 // Types for our data
@@ -76,6 +75,17 @@ interface MetricCalculationData {
   categoryData: CategoryData[]; // Note: Currently period-agnostic
   startDate: Date;
   endDate: Date;
+}
+
+// Add interface for the spending comparison data
+interface SpendingComparisonData {
+  period: string;
+  spending: number;
+  earnings: number;
+  netEarnings: number;
+  isPremiumEligible: boolean;
+  isCurrentMonth: boolean;
+  date: Date;
 }
 
 type ChartType = 'bar' | 'line' | 'pie' | 'area' | 'composed' | 'heatmap'; // Add heatmap
@@ -224,6 +234,15 @@ const Insights: React.FC = () => {
     }
   });
 
+  // New state for Net Balance Tracker
+  const [currentMonthSavings, setCurrentMonthSavings] = useState<number>(0);
+  const [previousMonthSavings, setPreviousMonthSavings] = useState<number>(0);
+  const [lifetimeSavings, setLifetimeSavings] = useState<number>(0);
+  const [userPercentile, setUserPercentile] = useState<number>(0);
+
+  // Add state for spending comparison data
+  const [spendingComparisonData, setSpendingComparisonData] = useState<SpendingComparisonData[]>([]);
+
   // Memoize filtered data to avoid recalculating on every render
   const filteredSpending = useMemo(() => {
       return rawSpendingData.filter(d => d.date >= startDate && d.date <= endDate);
@@ -321,6 +340,9 @@ const Insights: React.FC = () => {
     setAverageRepaymentTime(15 + Math.floor(Math.random() * 10)); 
     setTotalAdvances(applications?.length || 0); 
 
+    // Net balance data will be calculated by updateNetBalanceFromComparison 
+    // after spending comparison data is generated
+
     setLoading(false);
   }, [applications]); 
 
@@ -392,6 +414,9 @@ const Insights: React.FC = () => {
     });
     setCumulativeSpendingData(cumulativeData);
     
+    // Generate spending comparison data
+    generateSpendingComparisonData(aggSpending);
+    
     // Update monthly breakdown based on the *last month* in the range
     updateMonthlyBreakdown(MONTHS[endDate.getMonth()]); 
 
@@ -399,6 +424,143 @@ const Insights: React.FC = () => {
     if(drillDownData) setDrillDownData(null); // Clear drill-down when underlying data changes
 
   }, [filteredSpending, filteredRepayment, startDate, endDate, aggregationPeriod]); // Depend on memoized filtered data
+
+  // Generate spending comparison data
+  const generateSpendingComparisonData = useCallback((spendingData: AggregatedSpendingData[]) => {
+    // Filter to only get monthly data
+    const monthlyData = spendingData.filter(item => {
+      // Check if period format is like "Jan 2023"
+      return /^[A-Za-z]{3} \d{4}$/.test(item.period);
+    });
+
+    // Get current month/year as string (e.g. "Jan 2023")
+    const today = new Date();
+    const currentMonthYear = `${MONTHS[today.getMonth()]} ${today.getFullYear()}`;
+    
+    // Create comparison data with more dramatic variations
+    const comparisonData: SpendingComparisonData[] = monthlyData.map((item, index) => {
+      // Parse period string to Date for sorting
+      const [month, year] = item.period.split(' ');
+      const monthIndex = MONTHS.indexOf(month);
+      const date = new Date(parseInt(year), monthIndex, 1);
+      
+      // Use a consistent seed for deterministic randomness
+      const seed = month.charCodeAt(0) + monthIndex + parseInt(year);
+      
+      // Make April the qualifying month for Bree+ Free (special case)
+      const isApril = month === 'Apr';
+      
+      let earnings: number;
+      let spending: number = item.amount;
+      let netEarnings: number;
+      
+      if (isApril) {
+        // April: Just above threshold for Bree+ Free qualification
+        earnings = spending + 120 + (seed % 30); // Ensure April is above threshold
+        netEarnings = earnings - spending;
+      } else {
+        // Create a pattern for other months
+        // 0: Heavily negative (spending far exceeds earnings)
+        // 1: Moderately negative
+        // 2: Slightly negative
+        // 3: Close to threshold but below
+        // 4: Comfortably above threshold (but make fewer months like this)
+        const patternType = (month === 'Mar' || month === 'May') ? 3 : (index % 5); // Make months adjacent to April close to qualifying
+        
+        switch (patternType) {
+          case 0: // Heavily negative months (spending far exceeds earnings)
+            earnings = spending * 0.6 + (seed % 50); // 40% less than spending plus small variation
+            netEarnings = earnings - spending; // Will be significantly negative
+            break;
+            
+          case 1: // Moderately negative months
+            earnings = spending * 0.8 + (seed % 40); // 20% less than spending plus small variation
+            netEarnings = earnings - spending; // Will be moderately negative
+            break;
+            
+          case 2: // Slightly below threshold
+            earnings = spending + 50 + (seed % 40); // Close to spending plus small variation
+            netEarnings = earnings - spending; // Will be positive but below threshold
+            break;
+            
+          case 3: // Just barely below threshold (for months adjacent to April)
+            earnings = spending + 80 + (seed % 15); // Just below threshold
+            netEarnings = earnings - spending; // Will be just below 100
+            break;
+            
+          case 4: // Comfortably above threshold
+          default:
+            earnings = spending + 180 + (seed % 100); // Well above threshold
+            netEarnings = earnings - spending; // Will be well above 100
+            break;
+        }
+      }
+      
+      // Ensure all values are properly rounded for display
+      spending = Math.round(spending);
+      earnings = Math.round(earnings);
+      netEarnings = Math.round(earnings - spending); // Recalculate to ensure exact match
+      
+      // Premium eligibility is when net (earnings - spending) is at least $100
+      return {
+        period: item.period,
+        spending: spending,
+        earnings: earnings,
+        netEarnings: netEarnings,
+        isPremiumEligible: netEarnings >= 100,
+        isCurrentMonth: item.period === currentMonthYear,
+        date: date
+      };
+    });
+    
+    // Sort data chronologically
+    comparisonData.sort((a, b) => a.date.getTime() - b.date.getTime());
+    
+    // Update Net Balance Tracker data based on this data
+    updateNetBalanceFromComparison(comparisonData);
+    
+    setSpendingComparisonData(comparisonData);
+  }, [MONTHS]);
+
+  // Add a function to update Net Balance data from spending comparison data
+  const updateNetBalanceFromComparison = (comparisonData: SpendingComparisonData[]) => {
+    if (!comparisonData.length) return;
+
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const currentMonthStr = `${MONTHS[currentMonth]} ${currentYear}`;
+    
+    // Find current month's data
+    const currentMonthData = comparisonData.find(item => item.period === currentMonthStr);
+    
+    // Find previous month's data
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+    const prevMonthStr = `${MONTHS[prevMonth]} ${prevYear}`;
+    const prevMonthData = comparisonData.find(item => item.period === prevMonthStr);
+    
+    // Calculate lifetime savings (sum of all positive net earnings)
+    const lifetimeSavingsValue = comparisonData
+      .filter(item => item.netEarnings > 0)
+      .reduce((sum, item) => sum + item.netEarnings, 0);
+    
+    // Update state with values from spending comparison data
+    if (currentMonthData) {
+      setCurrentMonthSavings(currentMonthData.netEarnings);
+    }
+    
+    if (prevMonthData) {
+      setPreviousMonthSavings(prevMonthData.netEarnings);
+    }
+    
+    setLifetimeSavings(lifetimeSavingsValue);
+    
+    // Calculate how many months are eligible out of total
+    const eligibleMonths = comparisonData.filter(item => item.isPremiumEligible).length;
+    const percentile = Math.round((eligibleMonths / comparisonData.length) * 100);
+    setUserPercentile(percentile);
+  };
 
   // Update monthly breakdown 
   const updateMonthlyBreakdown = useCallback((monthKey: string) => { 
@@ -493,6 +655,175 @@ const Insights: React.FC = () => {
       console.error("Error saving metrics selection to localStorage:", error);
     }
   }, [selectedAdvancedMetrics]);
+
+  // Render Spending Comparison Chart
+  const renderSpendingComparisonChart = useCallback(() => {
+    // Find the minimum and maximum values for better Y-axis scaling
+    const allValues = spendingComparisonData.flatMap(item => [
+      item.spending, 
+      item.earnings, 
+      item.netEarnings
+    ]);
+    const minValue = Math.min(...allValues, 0); // Include 0 as a minimum
+    const maxValue = Math.max(...allValues, 150); // Make sure we show above the threshold
+    
+    // Find periods where user is below threshold
+    const belowThresholdPeriods = spendingComparisonData
+      .filter(item => item.netEarnings < 100)
+      .map(item => item.period);
+    
+    return (
+      <ResponsiveContainer width="100%" height={350}>
+        <LineChart 
+          data={spendingComparisonData} 
+          margin={{ top: 20, right: 30, left: 20, bottom: 30 }} // Added bottom margin for legend spacing
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="period" />
+          <YAxis 
+            tickFormatter={(value) => `$${value}`} 
+            domain={[minValue < 0 ? minValue - 10 : 0, maxValue + 20]}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend verticalAlign="bottom" height={36} /> {/* Increased legend height */}
+          
+          {/* Premium threshold reference line - removed the label */}
+          <ReferenceLine 
+            y={100} 
+            stroke="#4361ee" 
+            strokeDasharray="5 5" 
+            strokeWidth={2}
+          />
+          
+          {/* Reference areas for below threshold periods */}
+          {belowThresholdPeriods.map((period, i) => (
+            <ReferenceArea 
+              key={`below-threshold-${i}`}
+              x1={period} 
+              x2={period} 
+              y1={0} 
+              y2={100}
+              strokeOpacity={0.3}
+              fill="#f72585" 
+              fillOpacity={0.1}
+            />
+          ))}
+          
+          <Line 
+            type="monotone" 
+            dataKey="spending" 
+            name="Monthly Spending" 
+            stroke="#f72585" 
+            strokeWidth={2} 
+            dot={(props) => {
+              const { cx, cy, payload } = props;
+              return payload.isCurrentMonth ? (
+                <circle 
+                  cx={cx} 
+                  cy={cy} 
+                  r={6} 
+                  fill="#f72585" 
+                  stroke="#fff" 
+                  strokeWidth={2} 
+                />
+              ) : (
+                <circle 
+                  cx={cx} 
+                  cy={cy} 
+                  r={4} 
+                  fill="#f72585" 
+                />
+              );
+            }}
+          />
+          <Line 
+            type="monotone" 
+            dataKey="earnings" 
+            name="Monthly Earnings" 
+            stroke="#4cc9f0" 
+            strokeWidth={2} 
+            dot={(props) => {
+              const { cx, cy, payload } = props;
+              return payload.isCurrentMonth ? (
+                <circle 
+                  cx={cx} 
+                  cy={cy} 
+                  r={6} 
+                  fill="#4cc9f0" 
+                  stroke="#fff" 
+                  strokeWidth={2} 
+                />
+              ) : (
+                <circle 
+                  cx={cx} 
+                  cy={cy} 
+                  r={4} 
+                  fill="#4cc9f0" 
+                />
+              );
+            }}
+          />
+          {/* Net Earnings line with special styling for below threshold points */}
+          <Line 
+            type="monotone" 
+            dataKey="netEarnings" 
+            name="Net Earnings" 
+            stroke="#3a0ca3" 
+            strokeWidth={2}
+            dot={(props) => {
+              const { cx, cy, payload } = props;
+              const isBelowThreshold = payload.netEarnings < 100;
+              
+              // For current month
+              if (payload.isCurrentMonth) {
+                return (
+                  <circle 
+                    cx={cx} 
+                    cy={cy} 
+                    r={6} 
+                    fill={isBelowThreshold ? "#f72585" : "#3a0ca3"}
+                    stroke="#fff" 
+                    strokeWidth={2} 
+                  />
+                );
+              }
+              
+              // For other months
+              return isBelowThreshold ? (
+                <circle 
+                  cx={cx} 
+                  cy={cy} 
+                  r={5} 
+                  fill="#f72585" 
+                  stroke="#3a0ca3"
+                  strokeWidth={1}
+                />
+              ) : (
+                <circle 
+                  cx={cx} 
+                  cy={cy} 
+                  r={4} 
+                  fill="#3a0ca3" 
+                />
+              );
+            }}
+          />
+          
+          {/* Manually add the Bree+ Free line to legend */}
+          <Line 
+            dataKey={() => null} // No actual data, just for legend
+            name="Bree+ Free Threshold" 
+            stroke="#4361ee" 
+            strokeDasharray="5 5" 
+            strokeWidth={2}
+            dot={false}
+            activeDot={false}
+            legendType="line"
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    );
+  }, [spendingComparisonData]);
 
   // Render chart based on selected type
   const renderSpendingChart = useCallback((): React.ReactElement => {
@@ -797,33 +1128,98 @@ const Insights: React.FC = () => {
 
       {/* Key metrics cards */}
       <div className="insights-grid">
-        <div className="card metric-card">
-          <div className="card-title">Total Cash Advances</div>
-          <div className="metric-value">{totalAdvances}</div> 
-          <div className="card-subtitle">Lifetime total</div>
+        <div className="card metric-card" style={{ 
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center'
+        }}>
+          <div className="card-title">Current Bree+ Eligibility</div>
+          {spendingComparisonData.length > 0 && spendingComparisonData.find(item => item.isCurrentMonth)?.isPremiumEligible ? (
+            <>
+              <div className="metric-value">
+                ${Math.max(0, (spendingComparisonData.find(item => item.isCurrentMonth)?.netEarnings || 0) - 100)}
+              </div>
+              <div className="card-subtitle">
+                <span className="threshold-status positive">
+                  above Bree+ Free threshold
+                </span>
+                <div className="benefits-info">
+                  You're eligible for a 20% larger Advance Payment and a longer repayment period of 60 days
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="metric-value">
+                ${Math.abs(100 - (spendingComparisonData.find(item => item.isCurrentMonth)?.netEarnings || 0))}
+              </div>
+              <div className="card-subtitle">
+                <span className="threshold-status negative">
+                  away from Bree+ Free
+                </span>
+              </div>
+            </>
+          )}
         </div>
         
         <div className="card metric-card">
-          <div className="card-title">
-            Avg Spending / {aggregationPeriod === 'daily' ? 'Day' : aggregationPeriod.replace('ly', '')}
+          <div className="card-title">📈 Net Balance Tracker</div>
+          <div className="net-balance-content">
+            <div className="savings-row">
+              <span className="savings-label">Monthly net earnings:</span>
+              <span className="savings-value">
+                {currentMonthSavings >= 0 
+                  ? `You saved $${currentMonthSavings.toFixed(2)} this month` 
+                  : `You spent $${Math.abs(currentMonthSavings).toFixed(2)} more than you earned`
+                }
+                {currentMonthSavings > previousMonthSavings ? 
+                  <span className="savings-delta positive">(+${(currentMonthSavings - previousMonthSavings).toFixed(0)} from last month)</span> : 
+                  <span className="savings-delta negative">(-${(previousMonthSavings - currentMonthSavings).toFixed(0)} from last month)</span>
+                }
+              </span>
+            </div>
+            <div className="savings-row">
+              <span className="savings-label">Lifetime net earnings:</span>
+              <span className="savings-value">${lifetimeSavings.toFixed(2)}</span>
+            </div>
+            <div className="percentile-badge">
+              You're eligible for Bree+ Free in {userPercentile}% of months
+            </div>
           </div>
-          <div className="metric-value">
-            $ 
-            {
-              aggregationPeriod === 'daily' 
-              ? (rawSpendingData.filter(d => d.date >= startDate && d.date <= endDate).reduce((sum, item) => sum + item.amount, 0) / (((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1)).toFixed(2)
-              : (aggregatedSpendingData.reduce((sum, item) => sum + item.amount, 0) / (aggregatedSpendingData.length || 1)).toFixed(2)
-            }
-          </div>
-          <div className="card-subtitle">Selected period average</div>
         </div>
-        
-        <div className="card metric-card">
-           <div className="card-title">Total Spending</div>
-           <div className="metric-value">
-             ${filteredSpending.reduce((sum, item) => sum + item.amount, 0).toLocaleString()}
-           </div>
-           <div className="card-subtitle">In selected period</div>
+      </div>
+      
+      {/* Spending Comparison Chart - Moved to top of charts section */}
+      <div className="card mt-4">
+        <div className="chart-header">
+          <h2>Spending vs Earnings</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <button 
+              onClick={() => {
+                const exportData = spendingComparisonData.map(item => ({
+                  period: item.period,
+                  spending: item.spending,
+                  earnings: item.earnings,
+                  netEarnings: item.netEarnings,
+                  premiumEligible: item.isPremiumEligible ? 'Yes' : 'No'
+                }));
+                downloadCSV(exportData, `spending-earnings-comparison-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.csv`);
+              }} 
+              style={{ padding: '5px 10px' }} 
+              disabled={!spendingComparisonData || spendingComparisonData.length === 0}
+            >
+              Export CSV
+            </button>
+          </div>
+        </div>
+        <div className="chart-container">
+          {renderSpendingComparisonChart()}
+          <p className="chart-hint" style={{ marginTop: '16px' }}>
+            The horizontal line at $100 shows the Bree+ Free premium threshold. 
+            When your spending (red) approaches or exceeds your earnings (blue), your Net Earnings (purple) 
+            fall below this threshold (highlighted in red areas), and you lose free premium eligibility.
+          </p>
         </div>
       </div>
       
@@ -847,47 +1243,9 @@ const Insights: React.FC = () => {
         </div>
       )}
 
-      {/* Top Charts Section */}
+      {/* Remaining Charts Section */}
       <div className="charts-section">
-        {/* Spending Trends Chart */}
-        <div className="card mt-4">
-          <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-             <h2>Spending Trends {spendingChartType === 'heatmap' ? '(Daily Intensity)' : `(by ${aggregationPeriod.replace('ly', '')})`}</h2>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <div className="chart-controls">
-                  <label htmlFor="spending-chart-type">Chart Type: </label>
-                  <select
-                    id="spending-chart-type"
-                    value={spendingChartType}
-                    onChange={(e) => setSpendingChartType(e.target.value as ChartType)}
-                    className="chart-type-dropdown"
-                  >
-                    <option value="bar">Bar Chart</option>
-                    <option value="line">Line Chart</option>
-                    <option value="area">Area Chart</option>
-                    <option value="composed">Composed Chart</option>
-                    <option value="heatmap">Heat Map</option> 
-                  </select>
-                </div>
-                 <button 
-                    onClick={() => downloadCSV(aggregatedSpendingData, `spending-trends-${aggregationPeriod}-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.csv`)} 
-                    style={{ padding: '5px 10px' }} 
-                    disabled={!aggregatedSpendingData || aggregatedSpendingData.length === 0}
-                 >
-                     Export CSV
-                 </button>
-             </div>
-          </div>
-          <div className="chart-container">
-            {renderSpendingChart()}
-            {(spendingChartType === 'bar' && aggregationPeriod !== 'daily') && 
-              <p className="chart-hint">Click on a bar to see daily details for that {aggregationPeriod.replace('ly', '')}.</p>}
-            {spendingChartType === 'heatmap' && 
-              <p className="chart-hint">Shows daily spending intensity. Darker squares mean higher spending.</p>}
-          </div>
-        </div>
-        
-        {/* Spending by Category Chart */}
+        {/* Category Chart */}
         <div className="card mt-4">
           <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2>Spending by Category</h2>
@@ -986,11 +1344,6 @@ const Insights: React.FC = () => {
         </div>
       </div>
       
-      {/* Spending Comparison Section - Add the new component here */}
-      <div className="chart-section">
-         <SpendingComparisonChart />
-      </div>
-
       {/* --- Advanced Metrics Section --- */}
       {selectedAdvancedMetrics.length > 0 && (
           <div className="advanced-metrics-section mt-5">

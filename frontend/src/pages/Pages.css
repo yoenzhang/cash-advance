@@ -144,6 +144,92 @@
   color: var(--gray-color);
 }
 
+/* Net Balance Tracker Card Styles */
+.net-balance-content {
+  text-align: left;
+  padding: 0.5rem 0;
+}
+
+.savings-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.75rem;
+}
+
+.savings-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--dark-color);
+  margin-bottom: 0.25rem;
+}
+
+.savings-value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.savings-delta {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+}
+
+.savings-delta.positive {
+  color: #2e7d32;
+  background-color: rgba(46, 125, 50, 0.1);
+}
+
+.savings-delta.negative {
+  color: #d32f2f;
+  background-color: rgba(211, 47, 47, 0.1);
+}
+
+.percentile-badge {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background-color: #f0f4ff;
+  border-left: 4px solid var(--primary-color);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--dark-color);
+  border-radius: 0 4px 4px 0;
+}
+
+/* Threshold status styles */
+.threshold-status {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+.threshold-status.positive {
+  color: #2e7d32;
+  background-color: rgba(46, 125, 50, 0.1);
+}
+
+.threshold-status.negative {
+  color: #d32f2f;
+  background-color: rgba(211, 47, 47, 0.1);
+}
+
+/* Benefits info styles */
+.benefits-info {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #444;
+  border-top: 1px solid #e0e0e0;
+  font-weight: 500;
+}
+
 /* Date Range Card */
 .date-range-card {
   background-color: #f9f9f9; /* Slightly different background */
@@ -571,7 +657,7 @@
   }
   
   .chart-bar { /* Kept for reference */
-    width: 20px;
+    height: 25px;
   }
   
   .monthly-breakdown-header {
@@ -583,40 +669,53 @@
   .chart-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: 1rem;
   }
   
   .chart-controls {
+    flex-wrap: wrap;
     width: 100%;
-    justify-content: space-between;
   }
   
   .chart-type-dropdown {
-    flex-grow: 1; /* Allow dropdown to take available space */
+    width: 100%;
   }
   
   .date-range-controls {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
     gap: 1rem;
   }
   
   .date-picker-input {
     width: 100%;
   }
-
+  
   .advanced-metrics-grid {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: 1fr;
   }
-
+  
   .advanced-metric-card .metric-value {
-    font-size: 1.8rem;
+    font-size: 2rem;
+  }
+  
+  /* Net Balance Tracker Responsive Styles */
+  .savings-value {
+    font-size: 1.1rem;
+  }
+  
+  .savings-delta {
+    display: block;
+    margin-left: 0;
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
   }
 }
 
 @media (max-width: 576px) {
   .chart-bar-container { /* Kept for reference */
-    height: 160px;
+    overflow-x: auto;
+    padding-bottom: 1rem;
   }
   
   .metric-value {
@@ -624,11 +723,28 @@
   }
   
   .breakdown-table th,
-  .breakdown-table td,
-  .drill-down-table th,
-  .drill-down-table td {
+  .breakdown-table td {
     padding: 0.5rem;
+    font-size: 0.85rem;
+  }
+  
+  /* Net Balance Tracker Mobile Styles */
+  .net-balance-content {
+    padding: 0.25rem 0;
+  }
+  
+  .savings-label, .savings-value {
     font-size: 0.9rem;
+  }
+  
+  .savings-delta {
+    font-size: 0.8rem;
+    padding: 0.1rem 0.4rem;
+  }
+  
+  .percentile-badge {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.6rem;
   }
 }
 
