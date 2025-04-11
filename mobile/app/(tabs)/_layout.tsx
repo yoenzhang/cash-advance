@@ -12,7 +12,8 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: appColors.primary,
         headerShown: false,
-        tabBarStyle: { display: 'none' },
+        tabBarHideOnKeyboard: true,
+        tabBarLabelPosition: 'below-icon',
       }}>
       <Tabs.Screen
         name="dashboard"

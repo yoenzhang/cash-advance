@@ -11,7 +11,6 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ApplicationProvider } from './context/ApplicationContext';
 import { appColors } from '@/constants/appColors';
-import GlobalHeader from './components/GlobalHeader';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -54,19 +53,15 @@ function RootLayoutNav() {
   // Expo Router handles the actual screen rendering via <Slot /> or file structure
   return (
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          {/* Wrap Header, Stack, and StatusBar */}
-          <>
-              <GlobalHeader />
-              <Stack>
-                {/* Define all screens unconditionally */}
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="login" options={{ headerShown: false }} />
-                <Stack.Screen name="register" options={{ headerShown: false }} />
-                 {/* Fallback for not found */}
-                <Stack.Screen name="+not-found" />
-              </Stack>
-              <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-          </>
+          <Stack>
+            {/* Define all screens unconditionally */}
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="register" options={{ headerShown: false }} />
+             {/* Fallback for not found */}
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       </ThemeProvider>
   );
 }
