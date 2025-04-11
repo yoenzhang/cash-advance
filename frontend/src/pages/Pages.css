@@ -651,36 +651,80 @@
 }
 
 .drill-down-table th,
-.drill-down-table td {
-  padding: 0.6rem 0.8rem;
+.drill-down-table td,
+.category-drill-down-table th,
+.category-drill-down-table td {
+  padding: 0.75rem;
   text-align: left;
-  border-bottom: 1px solid #d5e2ff;
+  border-bottom: 1px solid #eaeaea;
 }
 
-.drill-down-table th {
+.drill-down-table th,
+.category-drill-down-table th {
   font-weight: 600;
-  background-color: #e6ecff;
+  color: var(--dark-color);
+  background-color: #f9f9fb;
 }
 
-.drill-down-table tbody tr:nth-child(even) {
+.drill-down-table tbody tr:nth-child(even),
+.category-drill-down-table tbody tr:nth-child(even) {
   background-color: #f8faff;
 }
 
 .close-drilldown-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
   background-color: var(--primary-color);
-  color: white;
+  color: #fff;
   border: none;
-  padding: 0.6rem 1.2rem;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   transition: var(--transition);
   font-weight: 500;
-  display: block; /* Center button */
-  margin: 1rem auto 0 auto;
 }
 
 .close-drilldown-btn:hover {
   background-color: var(--primary-dark);
+}
+
+/* Category Drill Down Styles */
+.category-drill-down-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px dashed #ddd;
+}
+
+.category-drill-down-section h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--dark-color);
+}
+
+.category-drill-down-hint {
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: var(--gray-color);
+  font-style: italic;
+}
+
+.category-drill-down-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.breakdown-table tr {
+  transition: background-color 0.2s ease;
+}
+
+.breakdown-table tr:hover {
+  background-color: #f0f4ff;
+  cursor: pointer;
 }
 
 /* Tips Styles */
@@ -915,4 +959,558 @@
   font-weight: 600;
   color: var(--dark-color);
   margin-right: 0.25rem;
+}
+
+/* Bree+ Upgrade Banner */
+.bree-plus-upgrade-banner {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #fff8e6;
+  border-left: 4px solid #ffc107;
+  border-radius: 0 4px 4px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.bree-plus-upgrade-banner p {
+  margin: 0;
+  font-weight: 500;
+  color: #555;
+  flex: 1;
+}
+
+.upgrade-button {
+  background-color: #ffc107;
+  color: #333;
+  border: none;
+  transition: var(--transition);
+}
+
+.upgrade-button:hover {
+  background-color: #ffb300;
+  transform: translateY(-2px);
+}
+
+/* Weekly Paycheck Digest Card */
+.weekly-digest-card {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+}
+
+.weekly-digest-card h2 {
+  margin-bottom: 1.25rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--dark-color);
+}
+
+.weekly-digest-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.weekly-income {
+  margin-bottom: 0.5rem;
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--dark-color);
+}
+
+.income-amount {
+  font-weight: 700;
+  font-size: 1.4rem;
+  color: var(--primary-color);
+}
+
+.weekly-spending-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.spending-category {
+  position: relative;
+  margin-bottom: 0.75rem;
+  height: 36px;
+}
+
+.category-bar {
+  height: 36px;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  min-width: 40px;
+}
+
+.category-details {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  height: 36px;
+  width: 100%;
+}
+
+/* Text inside the bar */
+.category-details.inside {
+  padding-left: 10px;
+}
+
+.category-details.inside .category-amount,
+.category-details.inside .category-arrow,
+.category-details.inside .category-name {
+  color: white;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); /* Enhanced text shadow for better readability */
+}
+
+/* Text outside the bar */
+.category-details.outside {
+  padding-left: 0;
+}
+
+.category-details.outside .category-amount {
+  margin-left: 10px;
+  color: var(--dark-color);
+  text-shadow: none;
+}
+
+.category-details.outside .category-arrow {
+  color: var(--dark-color);
+  text-shadow: none;
+}
+
+.category-details.outside .category-name {
+  color: var(--dark-color);
+  text-shadow: none;
+}
+
+.category-amount {
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.category-arrow {
+  margin: 0 8px;
+  font-weight: bold;
+}
+
+.category-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%; /* Prevent text from overflowing the bar */
+}
+
+.spending-alert {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background-color: #fff8e6;
+  border-left: 4px solid #E63946; /* Updated to match the new gambling color */
+  border-radius: 0 4px 4px 0;
+}
+
+.spending-alert p {
+  margin: 0;
+  font-weight: 500;
+  color: var(--dark-color);
+}
+
+.spending-alert strong {
+  color: #E63946; /* Updated to match the new gambling color */
+}
+
+/* Media queries for Weekly Digest Card */
+@media (max-width: 768px) {
+  .weekly-digest-card h2 {
+    font-size: 1.2rem;
+  }
+  
+  .weekly-income {
+    font-size: 1.1rem;
+  }
+  
+  .income-amount {
+    font-size: 1.2rem;
+  }
+  
+  .category-details {
+    flex-wrap: nowrap; /* Prevent wrapping on mobile */
+  }
+  
+  .category-name {
+    max-width: 40%; /* Further restrict width on mobile */
+  }
+}
+
+/* One Small Win Card - renamed to Weekly Wins */
+.one-small-win-card {
+  margin-bottom: 1rem;
+  padding: 1.25rem;
+  background-color: #f8f9fa;
+  border-left: 4px solid #4361EE;
+  flex: 1;
+}
+
+.one-small-win-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.win-icon {
+  font-size: 2rem;
+  color: #4361EE;
+  flex-shrink: 0;
+  margin-top: 0.25rem;
+}
+
+.win-details {
+  flex: 1;
+}
+
+.win-details h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--dark-color);
+}
+
+.weekly-wins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.win-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.win-checkmark {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.win-message {
+  font-size: 0.95rem;
+  color: #333;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.check-back-message {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #666;
+  border-top: 1px dashed #ddd;
+  padding-top: 0.5rem;
+}
+
+/* Media queries for Weekly Wins Card */
+@media (max-width: 768px) {
+  .one-small-win-card {
+    padding: 1rem;
+  }
+  
+  .win-icon {
+    font-size: 1.75rem;
+  }
+  
+  .win-details h3 {
+    font-size: 1rem;
+  }
+  
+  .win-message {
+    font-size: 0.9rem;
+  }
+  
+  .check-back-message {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .one-small-win-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .win-icon {
+    margin-bottom: 0.25rem;
+  }
+}
+
+/* Insights Summary Row - Redesigned Layout */
+.insights-summary-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.one-small-win-card {
+  flex: 0.3; /* 30% of the row */
+  display: flex;
+  flex-direction: column;
+}
+
+.financial-stack-card {
+  flex: 0.7; /* 70% of the row */
+  border-radius: 10px;
+  margin-bottom: 24px;
+  background-color: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.stack-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.stack-icon {
+  font-size: 24px;
+  margin-right: 12px;
+}
+
+.stack-content {
+  padding: 20px;
+}
+
+.stack-description {
+  margin-bottom: 24px;
+  font-size: 15px;
+  color: #555;
+  line-height: 1.5;
+}
+
+.stack-visual-container {
+  display: flex;
+  margin-bottom: 24px;
+}
+
+.stack-tower {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  margin-right: 24px;
+  min-width: 100px;
+}
+
+.tower-block {
+  width: 90px;
+  height: 28px;
+  margin-bottom: 2px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: slideIn 0.5s ease-out forwards;
+  transform: translateX(-50px);
+  opacity: 0;
+}
+
+@keyframes slideIn {
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.stack-blocks {
+  flex: 1;
+}
+
+.stack-block {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background-color: #f8f8f8;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.block-text {
+  flex: 1;
+}
+
+.stack-community-message {
+  background-color: #f7f7ff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  color: #4361EE;
+  font-weight: 500;
+  font-size: 14px;
+  text-align: center;
+}
+
+.stack-goal-section {
+  background-color: #fff9f0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+  border: 1px solid #ffe0b2;
+}
+
+.goal-section-title {
+  font-weight: 600;
+  margin-bottom: 14px;
+  font-size: 15px;
+  color: #333;
+}
+
+.goal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.goal-option {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.goal-option:hover {
+  border-color: #FF9D2E;
+  background-color: #fff8f0;
+}
+
+.goal-option.selected {
+  border-color: #FF9D2E;
+  background-color: #fff8f0;
+}
+
+.goal-option.locked {
+  background-color: #eefaf2;
+  border-color: #8eddaa;
+}
+
+.goal-radio {
+  margin-right: 10px;
+  color: #FF9D2E;
+  font-size: 18px;
+  width: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.goal-text {
+  font-size: 14px;
+}
+
+.goal-confirm-button {
+  background-color: #FF9D2E;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 0.2s ease;
+}
+
+.goal-confirm-button:hover {
+  background-color: #FF8914;
+}
+
+.goal-confirmed {
+  background-color: #eefaf2;
+  color: #228B22;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-weight: 500;
+  text-align: center;
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.stack-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stack-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.progress-value {
+  color: #FF9D2E;
+  font-weight: 600;
+}
+
+.stack-view-button {
+  background-color: #f5f5f5;
+  color: #555;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  width: 100%;
+}
+
+.stack-view-button:hover {
+  background-color: #e9e9e9;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .stack-visual-container {
+    flex-direction: column;
+  }
+  
+  .stack-tower {
+    margin-right: 0;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+  
+  .tower-block {
+    width: 80px;
+  }
+  
+  .insights-summary-row {
+    flex-direction: column;
+  }
+  
+  .one-small-win-card,
+  .financial-stack-card {
+    flex: 1;
+    width: 100%;
+  }
 } 

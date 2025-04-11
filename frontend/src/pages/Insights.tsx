@@ -51,6 +51,14 @@ interface DailySpendingDetail {
   amount: number;
 }
 
+// NEW: Interface for category expense details
+interface CategoryExpenseDetail {
+  date: string;
+  description: string;
+  amount: number;
+  location: string;
+}
+
 // Data for Heatmap
 interface HeatmapDataPoint {
   week: number; // Week number within the range/year
@@ -226,19 +234,18 @@ const Insights: React.FC = () => {
   // Drill-down state
   const [drillDownData, setDrillDownData] = useState<DailySpendingDetail[] | null>(null);
   const [drillDownPeriod, setDrillDownPeriod] = useState<string | null>(null);
+  
+  // NEW: Category drill-down state
+  const [categoryDrillDownData, setCategoryDrillDownData] = useState<CategoryExpenseDetail[] | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // Calculate cumulative data for line charts
   const [cumulativeSpendingData, setCumulativeSpendingData] = useState<AggregatedSpendingData[]>([]);
 
   // State for Advanced Metrics Selection
   const [selectedAdvancedMetrics, setSelectedAdvancedMetrics] = useState<string[]>(() => {
-    try {
-      const savedSelection = localStorage.getItem(LOCALSTORAGE_METRICS_KEY);
-      return savedSelection ? JSON.parse(savedSelection) : []; // Default to empty array
-    } catch (error) {
-      console.error("Error reading metrics selection from localStorage:", error);
-      return [];
-    }
+    // Always return all available metrics keys instead of checking localStorage
+    return availableAdvancedMetrics.map(metric => metric.key);
   });
 
   // New state for Net Balance Tracker
@@ -253,6 +260,10 @@ const Insights: React.FC = () => {
   // Add state for reallocation suggestions
   const [reallocationSuggestions, setReallocationSuggestions] = useState<ReallocationSuggestion[]>([]);
   const [tooltipVisible, setTooltipVisible] = useState<number | null>(null);
+
+  // The Stack state variables
+  const [selectedGoal, setSelectedGoal] = React.useState<number | null>(null);
+  const [goalLocked, setGoalLocked] = React.useState(false);
 
   // Memoize filtered data to avoid recalculating on every render
   const filteredSpending = useMemo(() => {
@@ -314,6 +325,19 @@ const Insights: React.FC = () => {
     const generatedSpending: SpendingData[] = [];
     const generatedRepayment: RepaymentData[] = [];
 
+    // Add specific late payments to guarantee 6+ late repayments
+    // Add 6 guaranteed late payments across the data range
+    const latePaymentMonths = [1, 3, 5, 7, 9, 11]; // Feb, Apr, Jun, Aug, Oct, Dec
+    latePaymentMonths.forEach(monthOffset => {
+      const latePaymentDate = new Date(today);
+      latePaymentDate.setMonth(today.getMonth() - monthOffset);
+      generatedRepayment.push({
+        date: new Date(latePaymentDate),
+        onTime: 0,
+        late: 1
+      });
+    });
+
     for (let d = new Date(oneYearAgo); d <= today; d.setDate(d.getDate() + 1)) {
       // Generate daily spending (make weekends potentially lower)
       const dayOfWeek = d.getDay();
@@ -328,7 +352,7 @@ const Insights: React.FC = () => {
          generatedRepayment.push({
            date: new Date(d),
            onTime: Math.random() > 0.2 ? Math.floor(Math.random() * 2) + 1 : 0, 
-           late: Math.random() > 0.8 ? 1 : 0 
+           late: Math.random() > 0.9 ? 1 : 0 // Make late payments less common in general data
          });
       }
     }
@@ -396,9 +420,22 @@ const Insights: React.FC = () => {
      });
      const aggRepayment: AggregatedRepaymentData[] = Array.from(repaymentMap, ([period, data]) => ({ period, ...data }));
 
-    // Sort aggregated data 
-    aggSpending.sort((a, b) => a.period.localeCompare(b.period)); 
-    aggRepayment.sort((a, b) => a.period.localeCompare(b.period));
+    // Sort aggregated data by date instead of alphabetically
+    const sortChronologically = (a: { period: string }, b: { period: string }) => {
+      // Parse periods like "Jan 2023", "Feb 2023", etc.
+      const [aMonth, aYear] = a.period.split(' ');
+      const [bMonth, bYear] = b.period.split(' ');
+      
+      // Compare years first
+      const yearDiff = parseInt(aYear) - parseInt(bYear);
+      if (yearDiff !== 0) return yearDiff;
+      
+      // If years are same, compare months
+      return MONTHS.indexOf(aMonth) - MONTHS.indexOf(bMonth);
+    };
+    
+    aggSpending.sort(sortChronologically);
+    aggRepayment.sort(sortChronologically);
 
     setAggregatedSpendingData(aggSpending);
     setAggregatedRepaymentData(aggRepayment); // Set state used by advanced metrics calculation
@@ -701,6 +738,143 @@ const Insights: React.FC = () => {
     // In a real implementation, this would launch an AI chat modal
     console.log('Launch AI chat with question:', `Why did you recommend to ${suggestion.text.toLowerCase()}?`);
     alert('AI Chat would open here with the question: Why did you recommend this reallocation?');
+  }, []);
+
+  // NEW: Handle Category Click
+  const handleCategoryClick = useCallback((data: any) => {
+    // Handle different data structures from different click sources
+    if (!data) {
+      setCategoryDrillDownData(null);
+      setSelectedCategory(null);
+      return;
+    }
+
+    // Debug the click data to understand structure
+    console.log('Category click data:', data);
+
+    // Determine which format the click data is in
+    let clickedCategory = null;
+    
+    // Case 1: Direct click from table row (we pass the category directly)
+    if (data.category) {
+      clickedCategory = data.category;
+    } 
+    // Case 2: Click from pie/donut chart
+    else if (data.activePayload && data.activePayload.length > 0) {
+      // For pie charts, try to get the category directly from the payload
+      const payload = data.activePayload[0];
+      console.log('Active payload:', payload);
+      
+      // Try different approaches to get the category name
+      if (payload.payload && payload.payload.category) {
+        clickedCategory = payload.payload.category;
+      } else if (payload.name) {
+        clickedCategory = payload.name;
+      } else if (payload.payload && payload.payload.name) {
+        clickedCategory = payload.payload.name;
+      }
+      
+      // If still not found, log the issue
+      if (!clickedCategory) {
+        console.log('Could not determine category from pie chart click. Full payload:', payload);
+      }
+    }
+
+    // If we couldn't determine the category, exit early
+    if (!clickedCategory) {
+      console.log('Could not determine category from click data:', data);
+      return;
+    }
+    
+    console.log('Selected category:', clickedCategory);
+    setSelectedCategory(clickedCategory);
+
+    // Generate mock expenses for the selected category
+    const mockLocations: Record<string, string[]> = {
+      'Groceries': ['Walmart', 'Kroger', 'Aldi', 'Whole Foods', 'Trader Joe\'s', 'Target'],
+      'Housing': ['Rent Payment', 'Mortgage', 'Property Tax', 'HOA Fees', 'Home Insurance', 'Utilities'],
+      'Transport': ['Shell Gas', 'Uber', 'Lyft', 'Public Transit', 'Car Insurance', 'Vehicle Maintenance'],
+      'Utilities': ['Electric Company', 'Water Service', 'Internet Provider', 'Cell Phone', 'Gas Bill', 'Trash Service'],
+      'Entertainment': ['Netflix', 'Spotify', 'Movie Theater', 'Restaurant', 'Amazon', 'PlayStation Store']
+    };
+    
+    const mockDescriptions: Record<string, string[]> = {
+      'Groceries': ['Weekly shopping', 'Fresh produce', 'Household items', 'Snacks', 'Meal prep', 'Specialty foods'],
+      'Housing': ['Monthly rent', 'Mortgage payment', 'Maintenance', 'Property tax', 'Insurance', 'Repairs'],
+      'Transport': ['Fuel', 'Rideshare', 'Public transit pass', 'Oil change', 'Car payment', 'Parking'],
+      'Utilities': ['Monthly bill', 'Service charge', 'Usage fee', 'Plan payment', 'Late fee', 'Annual fee'],
+      'Entertainment': ['Subscription', 'Dining out', 'Movie tickets', 'Online purchase', 'Digital content', 'Event tickets']
+    };
+    
+    // Get the appropriate locations and descriptions for this category
+    const locations = mockLocations[clickedCategory] || ['Unknown location'];
+    const descriptions = mockDescriptions[clickedCategory] || ['Unknown purchase'];
+    
+    // Generate random dates in the current month
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    
+    // Generate 5-10 mock expenses for this category
+    const numberOfExpenses = Math.floor(Math.random() * 6) + 5;
+    const mockExpenses: CategoryExpenseDetail[] = [];
+    
+    for (let i = 0; i < numberOfExpenses; i++) {
+      // Random date in current month
+      const day = Math.floor(Math.random() * daysInMonth) + 1;
+      const date = new Date(currentYear, currentMonth, day);
+      
+      // Random amount based on category
+      let baseAmount = 0;
+      let variance = 0;
+      
+      switch (clickedCategory) {
+        case 'Groceries':
+          baseAmount = 50;
+          variance = 30;
+          break;
+        case 'Housing':
+          baseAmount = 800;
+          variance = 200;
+          break;
+        case 'Transport':
+          baseAmount = 40;
+          variance = 25;
+          break;
+        case 'Utilities':
+          baseAmount = 80;
+          variance = 40;
+          break;
+        case 'Entertainment':
+          baseAmount = 35;
+          variance = 30;
+          break;
+        default:
+          baseAmount = 50;
+          variance = 50;
+      }
+      
+      const amount = baseAmount + Math.floor(Math.random() * variance);
+      
+      // Random description and location
+      const description = descriptions[Math.floor(Math.random() * descriptions.length)];
+      const location = locations[Math.floor(Math.random() * locations.length)];
+      
+      mockExpenses.push({
+        date: date.toISOString().split('T')[0],
+        description,
+        amount,
+        location
+      });
+    }
+    
+    // Sort by date
+    mockExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    setCategoryDrillDownData(mockExpenses);
+    
+    const categoryDrillDownElement = document.getElementById('category-drill-down-section');
+    categoryDrillDownElement?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
   // Render Spending Comparison Chart
@@ -1094,27 +1268,110 @@ const Insights: React.FC = () => {
   }, [aggregatedRepaymentData, repaymentChartType]);
   
   const renderMonthlyChart = useCallback((): React.ReactElement => {
+    // Custom render label function to display category name
+    const renderCustomizedLabel = (props: any) => {
+      const { cx, cy, midAngle, innerRadius, outerRadius, percent, name } = props;
+      // Extract the category name - could be in 'name' or 'category' property
+      const categoryName = props.category || name || '';
+      
+      // Calculate position for label
+      const RADIAN = Math.PI / 180;
+      const radius = innerRadius + (outerRadius - innerRadius) * 0.7; // Position further out for better visibility
+      const x = cx + radius * Math.cos(-midAngle * RADIAN);
+      const y = cy + radius * Math.sin(-midAngle * RADIAN);
+      
+      // Only show labels for segments that are large enough (>5%)
+      if (percent < 0.05) return null;
+      
+      return (
+        <text 
+          x={x} 
+          y={y} 
+          fill="#fff" 
+          textAnchor={x > cx ? 'start' : 'end'} // Better positioning based on which side of the pie
+          dominantBaseline="central"
+          style={{ 
+            fontWeight: 'bold', 
+            fontSize: '12px', 
+            textShadow: '0 1px 2px rgba(0,0,0,0.8)' // Improved shadow for better visibility
+          }}
+        >
+          {categoryName}
+        </text>
+      );
+    };
+
     switch (monthlyChartType) {
       case 'pie':
         return (
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
-              <Pie data={monthlyBreakdown} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="amount">
+              <Pie 
+                data={monthlyBreakdown} 
+                cx="50%" 
+                cy="50%" 
+                outerRadius={80} 
+                fill="#8884d8" 
+                dataKey="amount"
+                nameKey="category"
+                labelLine={false}
+                
+                onClick={(data) => {
+                  console.log('Direct pie onClick data:', data);
+                  if (data && data.category) {
+                    setSelectedCategory(data.category);
+                    setCategoryDrillDownData(null); // Clear any existing data
+                    handleCategoryClick({ category: data.category });
+                  }
+                }}
+              >
                 {monthlyBreakdown.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={COLORS[index % COLORS.length]} 
+                    cursor="pointer"
+                  />
                 ))}
               </Pie>
-              <Tooltip formatter={(value, name, entry) => [`$${value.toLocaleString()}`, entry.payload.category]} />
+              <Tooltip 
+                formatter={(value, name, entry) => {
+                  return [`$${value.toLocaleString()}`, entry.payload.category];
+                }} 
+              />
             </PieChart>
           </ResponsiveContainer>
         );
+        
       case 'donut':
         return (
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
-              <Pie data={monthlyBreakdown} cx="50%" cy="50%" innerRadius={60} outerRadius={80} fill="#8884d8" paddingAngle={5} dataKey="amount">
+              <Pie 
+                data={monthlyBreakdown} 
+                cx="50%" 
+                cy="50%" 
+                innerRadius={60} 
+                outerRadius={80} 
+                fill="#8884d8" 
+                paddingAngle={5} 
+                dataKey="amount"
+                nameKey="category"
+                labelLine={false}
+                onClick={(data) => {
+                  console.log('Direct donut onClick data:', data);
+                  if (data && data.category) {
+                    setSelectedCategory(data.category);
+                    setCategoryDrillDownData(null); // Clear any existing data
+                    handleCategoryClick({ category: data.category });
+                  }
+                }}
+              >
                 {monthlyBreakdown.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={COLORS[index % COLORS.length]} 
+                    cursor="pointer" 
+                  />
                 ))}
               </Pie>
               <Tooltip formatter={(value, name, entry) => [`$${value.toLocaleString()}`, entry.payload.category]} />
@@ -1124,12 +1381,12 @@ const Insights: React.FC = () => {
       case 'bar':
         return (
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={monthlyBreakdown} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}> 
+            <BarChart data={monthlyBreakdown} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }} onClick={handleCategoryClick}> 
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" tickFormatter={(value) => `$${value}`} />
               <YAxis type="category" dataKey="category" width={80} />
               <Tooltip formatter={(value) => `$${value.toLocaleString()}`} labelFormatter={(label) => `${label}`} />
-              <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
+              <Bar dataKey="amount" radius={[0, 4, 4, 0]} cursor="pointer">
                 {monthlyBreakdown.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
@@ -1140,52 +1397,356 @@ const Insights: React.FC = () => {
       default: 
         return renderMonthlyChart();
     }
-  }, [monthlyBreakdown, monthlyChartType]);
+  }, [monthlyBreakdown, monthlyChartType, handleCategoryClick]);
 
   if (loading && (!aggregatedSpendingData.length || !aggregatedRepaymentData.length || !heatmapData.length)) {
     return <div className="loading">Loading insights...</div>;
   }
+
+  // Handle goal selection for The Stack component
+  const handleGoalSelect = (index: number) => {
+    if (!goalLocked) {
+      setSelectedGoal(index);
+    }
+  };
+  
+  // Confirm selected goal for The Stack component
+  const confirmGoal = () => {
+    if (selectedGoal !== null) {
+      setGoalLocked(true);
+    }
+  };
 
   return (
     <div className="insights-page">
       <h1>Financial Insights</h1>
       <p className="subtitle">Track your financial performance and spending patterns</p>
       
-      {/* Date Range Selector */}
-       <div className="card date-range-card">
-         <div className="date-range-controls">
-           <div className="date-picker-container">
-             <label htmlFor="date-range">Select Date Range:</label>
-             <DatePicker
-               selectsRange={true}
-               startDate={startDate}
-               endDate={endDate}
-               onChange={handleDateChange}
-               isClearable={false} 
-               maxDate={new Date()} 
-               dateFormat="yyyy/MM/dd"
-               className="date-picker-input" 
-               wrapperClassName="date-picker-wrapper"
-             />
-           </div>
-           <div className="aggregation-selector-container">
-             <label htmlFor="aggregation-period">Aggregate Charts By:</label>
-             <select 
-               id="aggregation-period" 
-               value={aggregationPeriod} 
-               onChange={handleAggregationChange}
-               className="aggregation-dropdown"
-               disabled={spendingChartType === 'heatmap'} // Disable aggregation for heatmap
-             >
-               <option value="monthly">Monthly</option>
-               <option value="weekly">Weekly</option>
-               <option value="daily">Daily</option>
-             </select>
-           </div>
-         </div>
-         <p className="selected-range-label">Showing data for: {getDateRangeLabel(startDate, endDate)}</p>
-       </div>
-
+      {/* Insights Summary Row - Split Layout */}
+      <div className="insights-summary-row">
+        {/* One Small Win Card - renamed to Weekly Wins */}
+        <div className="card one-small-win-card mt-4">
+          <div className="one-small-win-content">
+            <div className="win-icon">🧠</div>
+            <div className="win-details">
+              <h3>Your Weekly Wins</h3>
+              <div className="weekly-wins-list">
+                {(() => {
+                  // Sample weekly wins
+                  const weeklyWins = [
+                    "You spent 11% less on gambling this week than last",
+                    "You went 2 days without spending over $50",
+                    "Your grocery spending was below average this month",
+                    "You made 3 consecutive on-time bill payments",
+                    "You spent 15% less on dining out compared to last month"
+                  ];
+                  
+                  // Render the wins as a list
+                  return weeklyWins.map((win, index) => (
+                    <div key={index} className="win-item">
+                      <span className="win-checkmark">✅</span>
+                      <span className="win-message">{win}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
+              <p className="check-back-message">Check back next week to see your next wins!</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* The Stack Card */}
+        <div className="card financial-stack-card mt-4">
+          <div className="stack-header">
+            <div className="stack-icon">🧱</div>
+            <h3>The Stack — Your Financial Foundation</h3>
+          </div>
+          <div className="stack-content">
+            <p className="stack-description">Build your stack block-by-block through smart money choices. Reset each week, but your foundation keeps growing.</p>
+            
+            <div className="stack-visual-container">
+              <div className="stack-tower">
+                {(() => {
+                  // Sample stack blocks (financial behaviors)
+                  const stackBlocks = [
+                    { text: "Skipped gambling on Apr 3", color: "#FF9D2E" },
+                    { text: "Paid a bill on time Apr 5", color: "#4361EE" },
+                    { text: "Kept balance above $10 for 3+ days Apr 7", color: "#9D4EDD" },
+                    { text: "Avoided food delivery for a week Apr 9", color: "#FF8914" },
+                    { text: "No e-transfers sent Apr 10", color: "#4CC9F0" }
+                  ];
+                  
+                  // Render stack blocks as a tower (in reverse to build bottom-up)
+                  return [...stackBlocks].reverse().map((block, index) => (
+                    <div 
+                      key={index} 
+                      className="tower-block"
+                      style={{
+                        // Slightly offset blocks for a stacked appearance
+                        marginLeft: `${(index % 2) * 8}px`,
+                        // Use color from data
+                        backgroundColor: block.color,
+                        // Animate in with a delay based on index
+                        animationDelay: `${index * 0.15}s`
+                      }}
+                      title={block.text}
+                    ></div>
+                  ));
+                })()}
+              </div>
+              
+              <div className="stack-blocks">
+                {(() => {
+                  // Sample stack blocks (financial behaviors) - show latest 3
+                  const stackBlocks = [
+                    "🧱 Skipped gambling on Apr 3",
+                    "🧱 Paid a bill on time Apr 5",
+                    "🧱 Kept balance above $10 for 3+ days Apr 7"
+                  ];
+                  
+                  // Render latest blocks as text
+                  return stackBlocks.map((block, index) => (
+                    <div key={index} className="stack-block">
+                      <span className="block-text">{block}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+            
+            <div className="stack-community-message">
+              Only 32% of Bree users have built a stack this high. Keep going!
+            </div>
+            
+            <div className="stack-goal-section">
+              <p className="goal-section-title">Pick your focus goal this week:</p>
+              
+              <div className="goal-options">
+                {(() => {
+                  const weeklyGoals = [
+                    "Avoid all food delivery for 7 days",
+                    "Keep balance above $20 for 3 days",
+                    "Don't send any e-transfers this week"
+                  ];
+                  
+                  return weeklyGoals.map((goal, index) => (
+                    <div 
+                      key={index} 
+                      className={`goal-option ${selectedGoal === index ? 'selected' : ''} ${goalLocked && selectedGoal === index ? 'locked' : ''}`}
+                      onClick={() => handleGoalSelect(index)}
+                    >
+                      <div className="goal-radio">
+                        {selectedGoal === index ? '●' : '○'}
+                      </div>
+                      <div className="goal-text">{goal}</div>
+                    </div>
+                  ));
+                })()}
+              </div>
+              
+              {selectedGoal !== null && !goalLocked && (
+                <button className="goal-confirm-button" onClick={confirmGoal}>
+                  Lock in my goal for this week
+                </button>
+              )}
+              
+              {goalLocked && (
+                <div className="goal-confirmed">
+                  ✅ Great — your goal has been locked in.
+                </div>
+              )}
+            </div>
+            
+            <div className="stack-footer">
+              <div className="stack-progress">
+                <span className="progress-label">🧱 Stack Progress:</span>
+                <span className="progress-value">3 blocks</span>
+              </div>
+              
+              <button className="stack-view-button">
+                👀 View my full stack history
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Weekly Paycheck Digest Card */}
+      <div className="card weekly-digest-card mt-4">
+        <h2>💸 Where Your Paycheck Went: Weekly Digest</h2>
+        <div className="weekly-digest-content">
+          <div className="weekly-income">
+            <p>You received <span className="income-amount">${(1145).toLocaleString()}</span> this week</p>
+          </div>
+          
+          <div className="weekly-spending-breakdown">
+            {/* Groceries & Essentials */}
+            <div className="spending-category">
+              {(() => {
+                const amount = 380;
+                const total = 1145;
+                const percentage = Math.round((amount/total)*100);
+                // Always display text inside, minimum 60% width for readability
+                const displayWidth = Math.max(60, percentage);
+                
+                return (
+                  <>
+                    <div className="category-bar" style={{ 
+                      width: `${displayWidth}%`, 
+                      backgroundColor: '#4361EE',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}>
+                      {/* Show true percentage as a background element */}
+                      {percentage < displayWidth && (
+                        <div style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: 0,
+                          height: '100%',
+                          width: `${displayWidth - percentage}%`,
+                          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                          borderLeft: '2px dashed rgba(255, 255, 255, 0.5)'
+                        }}></div>
+                      )}
+                    </div>
+                    <div className="category-details inside">
+                      <span className="category-amount">${amount.toLocaleString()}</span>
+                      <span className="category-arrow">→</span>
+                      <span className="category-name">Groceries & Essentials</span>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+            
+            {/* Gambling */}
+            <div className="spending-category">
+              {(() => {
+                const amount = 320;
+                const total = 1145;
+                const percentage = Math.round((amount/total)*100);
+                // Always display text inside, minimum 60% width for readability
+                const displayWidth = Math.max(60, percentage);
+                
+                return (
+                  <>
+                    <div className="category-bar" style={{ 
+                      width: `${displayWidth}%`, 
+                      backgroundColor: '#E63946',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}>
+                      {/* Show true percentage as a background element */}
+                      {percentage < displayWidth && (
+                        <div style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: 0,
+                          height: '100%',
+                          width: `${displayWidth - percentage}%`,
+                          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                          borderLeft: '2px dashed rgba(255, 255, 255, 0.5)'
+                        }}></div>
+                      )}
+                    </div>
+                    <div className="category-details inside">
+                      <span className="category-amount">${amount.toLocaleString()}</span>
+                      <span className="category-arrow">→</span>
+                      <span className="category-name">Gambling</span>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+            
+            {/* Transfers to Friends */}
+            <div className="spending-category">
+              {(() => {
+                const amount = 240;
+                const total = 1145;
+                const percentage = Math.round((amount/total)*100);
+                // Always display text inside, minimum 60% width for readability
+                const displayWidth = Math.max(60, percentage);
+                
+                return (
+                  <>
+                    <div className="category-bar" style={{ 
+                      width: `${displayWidth}%`, 
+                      backgroundColor: '#9D4EDD',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}>
+                      {/* Show true percentage as a background element */}
+                      {percentage < displayWidth && (
+                        <div style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: 0,
+                          height: '100%',
+                          width: `${displayWidth - percentage}%`,
+                          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                          borderLeft: '2px dashed rgba(255, 255, 255, 0.5)'
+                        }}></div>
+                      )}
+                    </div>
+                    <div className="category-details inside">
+                      <span className="category-amount">${amount.toLocaleString()}</span>
+                      <span className="category-arrow">→</span>
+                      <span className="category-name">Transfers to Friends</span>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+            
+            {/* Everything Else */}
+            <div className="spending-category">
+              {(() => {
+                const amount = 205;
+                const total = 1145;
+                const percentage = Math.round((amount/total)*100);
+                // Always display text inside, minimum 60% width for readability
+                const displayWidth = Math.max(60, percentage);
+                
+                return (
+                  <>
+                    <div className="category-bar" style={{ 
+                      width: `${displayWidth}%`, 
+                      backgroundColor: '#2A9D8F',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}>
+                      {/* Show true percentage as a background element */}
+                      {percentage < displayWidth && (
+                        <div style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: 0,
+                          height: '100%',
+                          width: `${displayWidth - percentage}%`,
+                          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                          borderLeft: '2px dashed rgba(255, 255, 255, 0.5)'
+                        }}></div>
+                      )}
+                    </div>
+                    <div className="category-details inside">
+                      <span className="category-amount">${amount.toLocaleString()}</span>
+                      <span className="category-arrow">→</span>
+                      <span className="category-name">Everything Else</span>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+          
+          <div className="spending-alert">
+            <p>⚠️ <strong>Gambling</strong> was your #1 spending category this week</p>
+          </div>
+        </div>
+      </div>
+      
       {/* Key metrics cards */}
       <div className="insights-grid">
         <div className="card metric-card" style={{ 
@@ -1251,7 +1812,7 @@ const Insights: React.FC = () => {
 
         {/* Smart Reallocation Tips Card */}
         <div className="card metric-card">
-          <div className="card-title">💡 Smart Reallocation Tips</div>
+          <div className="card-title">💡 Your Reallocation Tips</div>
           <div className="reallocation-content">
             {reallocationSuggestions.length > 0 ? (
               <ul className="reallocation-list">
@@ -1287,11 +1848,137 @@ const Insights: React.FC = () => {
         </div>
       </div>
       
-      {/* Spending Comparison Chart - Moved to top of charts section */}
+      {/* Combined Spending Breakdown Section with Month Selector */}
+      <div className="card mt-5">
+        <div className="monthly-breakdown-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+           <h2>📦 Spending Breakdown</h2> 
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+               <div className="chart-controls">
+                 <select 
+                   onChange={(e) => {
+                     const selectedMonth = e.target.value;
+                     updateMonthlyBreakdown(selectedMonth);
+                   }}
+                   defaultValue={MONTHS[new Date().getMonth()]}
+                   className="month-dropdown"
+                 >
+                   {MONTHS.map((month) => (
+                     <option key={month} value={month}>
+                       {month} {new Date().getFullYear()}
+                     </option>
+                   ))}
+                 </select>
+               </div>
+               <div className="chart-controls"> 
+                 <label htmlFor="monthly-chart-type">Chart Type: </label>
+                 <select id="monthly-chart-type" value={monthlyChartType} onChange={(e) => setMonthlyChartType(e.target.value as ChartType)} className="chart-type-dropdown">
+                   <option value="pie">Pie Chart</option>
+                   <option value="donut">Donut Chart</option>
+                   <option value="bar">Bar Chart</option>
+                 </select>
+               </div>
+                {monthlyBreakdown.length > 0 && (
+                    <button 
+                        onClick={() => downloadCSV(monthlyBreakdown, `spending-breakdown-${MONTHS[new Date().getMonth()]}-${new Date().getFullYear()}.csv`)} 
+                        style={{ padding: '5px 10px' }}
+                    >
+                        Export CSV
+                    </button>
+                )}
+            </div>
+        </div>
+        
+        <div className="monthly-breakdown-content">
+          <div className="monthly-charts">
+            <div className="monthly-pie-chart"> 
+               {renderMonthlyChart()}
+            </div>
+            
+            <div className="monthly-breakdown-table">
+              <table className="breakdown-table">
+                <thead><tr><th>Category</th><th>Amount</th><th>Percentage</th></tr></thead>
+                <tbody>
+                  {monthlyBreakdown.map((item, index) => (
+                    <tr 
+                      key={index} 
+                      onClick={() => {
+                        setSelectedCategory(item.category);
+                        handleCategoryClick({ category: item.category });
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td>
+                        <span className="category-color" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
+                        {item.category}
+                      </td>
+                      <td>${item.amount.toLocaleString()}</td>
+                      <td>{item.percentage}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot><tr><td><strong>Total</strong></td><td><strong>${monthlyBreakdown.reduce((sum, item) => sum + item.amount, 0).toLocaleString()}</strong></td><td>{monthlyBreakdown.reduce((sum, item) => sum + item.percentage, 0) > 0 ? '100%' : '0%'}</td></tr></tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Category Drill Down Section */}
+        {categoryDrillDownData && selectedCategory && (
+          <div id="category-drill-down-section" className="category-drill-down-section">
+            <h3>{selectedCategory} Expenses</h3>
+            <p className="category-drill-down-hint">Recent transactions in this category</p>
+            {categoryDrillDownData.length > 0 ? (
+              <table className="category-drill-down-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Location</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categoryDrillDownData.map((item, index) => (
+                    <tr key={index}>
+                      <td>{item.date}</td>
+                      <td>{item.description}</td>
+                      <td>{item.location}</td>
+                      <td>${item.amount.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p>No detailed expense data available for this category.</p>
+            )}
+            <button 
+              onClick={() => { setCategoryDrillDownData(null); setSelectedCategory(null); }} 
+              className="close-drilldown-btn"
+            >
+              Close Details
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Spending Comparison Chart with Date Range Selector */}
       <div className="card mt-4">
-        <div className="chart-header">
-          <h2>Spending vs Earnings</h2>
+        <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2>Your Spending & Earnings</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div className="date-picker-container">
+              <DatePicker
+                selectsRange={true}
+                startDate={startDate}
+                endDate={endDate}
+                onChange={handleDateChange}
+                isClearable={false} 
+                maxDate={new Date()} 
+                dateFormat="yyyy/MM/dd"
+                className="date-picker-input" 
+                wrapperClassName="date-picker-wrapper"
+              />
+            </div>
             <button 
               onClick={() => {
                 const exportData = spendingComparisonData.map(item => ({
@@ -1339,13 +2026,13 @@ const Insights: React.FC = () => {
            <button onClick={() => { setDrillDownData(null); setDrillDownPeriod(null); }} className="close-drilldown-btn">Close Details</button>
         </div>
       )}
-
+      
       {/* Remaining Charts Section */}
       <div className="charts-section">
         {/* Repayment Performance Chart */}
         <div className="card mt-4">
           <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2>Repayment Performance {`(by ${aggregationPeriod.replace('ly', '')})`}</h2>
+            <h2>💳 Repayment Performance</h2>
              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <div className="chart-controls">
                   <label htmlFor="repayment-chart-type">Chart Type: </label>
@@ -1367,112 +2054,41 @@ const Insights: React.FC = () => {
           <div className="chart-container">
             {renderRepaymentChart()}
           </div>
-        </div>
-      </div>
-      
-      {/* Combined Spending Breakdown Section */}
-      <div className="card mt-5">
-        <div className="monthly-breakdown-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-           <h2>📦 Spending Breakdown (Apr 2025)</h2> 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-               <div className="chart-controls"> 
-                 <label htmlFor="monthly-chart-type">Chart Type: </label>
-                 <select id="monthly-chart-type" value={monthlyChartType} onChange={(e) => setMonthlyChartType(e.target.value as ChartType)} className="chart-type-dropdown">
-                   <option value="pie">Pie Chart</option>
-                   <option value="donut">Donut Chart</option>
-                   <option value="bar">Bar Chart</option>
-                 </select>
-               </div>
-                {monthlyBreakdown.length > 0 && (
-                    <button 
-                        onClick={() => downloadCSV(monthlyBreakdown, `spending-breakdown-apr-2025.csv`)} 
-                        style={{ padding: '5px 10px' }}
-                    >
-                        Export CSV
-                    </button>
-                )}
+          
+          {/* Bree+ Upgrade Prompt for users with 5+ late payments */}
+          {aggregatedRepaymentData && 
+           aggregatedRepaymentData.reduce((sum, item) => sum + item.late, 0) >= 5 && (
+            <div className="bree-plus-upgrade-banner">
+              <p>❗ You've had 5+ late repayments. Consider upgrading to Bree+ for extended grace windows.</p>
+              <button className="close-drilldown-btn upgrade-button">Upgrade to Bree+</button>
             </div>
-        </div>
-        
-        <div className="monthly-breakdown-content">
-          <div className="monthly-charts">
-            <div className="monthly-pie-chart"> 
-               {renderMonthlyChart()}
-            </div>
-            
-            <div className="monthly-breakdown-table">
-              <table className="breakdown-table">
-                <thead><tr><th>Category</th><th>Amount</th><th>Percentage</th></tr></thead>
-                <tbody>
-                  {monthlyBreakdown.map((item, index) => (
-                    <tr key={index}><td><span className="category-color" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>{item.category}</td><td>${item.amount.toLocaleString()}</td><td>{item.percentage}%</td></tr>
-                  ))}
-                </tbody>
-                <tfoot><tr><td><strong>Total</strong></td><td><strong>${monthlyBreakdown.reduce((sum, item) => sum + item.amount, 0).toLocaleString()}</strong></td><td>{monthlyBreakdown.reduce((sum, item) => sum + item.percentage, 0) > 0 ? '100%' : '0%'}</td></tr></tfoot>
-              </table>
-            </div>
-          </div>
+          )}
         </div>
       </div>
       
       {/* --- Advanced Metrics Section --- */}
-      {selectedAdvancedMetrics.length > 0 && (
-          <div className="advanced-metrics-section mt-5">
-              <h2>Advanced Metrics</h2>
-              <div className="insights-grid advanced-metrics-grid">
-                  {availableAdvancedMetrics
-                      .filter(metric => selectedAdvancedMetrics.includes(metric.key))
-                      .map(metric => {
-                          const value = metric.calculate(metricCalculationData);
-                          let displayValue = metric.format(value);
+      <div className="advanced-metrics-section mt-5">
+          <h2>Other Metrics</h2>
+          <div className="insights-grid advanced-metrics-grid">
+              {availableAdvancedMetrics.map(metric => {
+                  const value = metric.calculate(metricCalculationData);
+                  let displayValue = metric.format(value);
 
-                          // Special formatting for highestSpendingCategory to include the name
-                          if (metric.key === 'highestSpendingCategory' && value !== null) {
-                             const category = categoryData.find((c: CategoryData) => c.value === value);
-                             displayValue = `${category?.name || 'Unknown'}: ${metric.format(value)}`;
-                          }
+                  // Special formatting for highestSpendingCategory to include the name
+                  if (metric.key === 'highestSpendingCategory' && value !== null) {
+                     const category = categoryData.find((c: CategoryData) => c.value === value);
+                     displayValue = `${category?.name || 'Unknown'}: ${metric.format(value)}`;
+                  }
 
-                          return (
-                              <div key={metric.key} className="card metric-card advanced-metric-card">
-                                  <div className="card-title">{metric.name}</div>
-                                  <div className="metric-value">{displayValue}</div> 
-                                  <div className="card-subtitle">{metric.description}</div>
-                              </div>
-                          );
-                      })}
-              </div>
+                  return (
+                      <div key={metric.key} className="card metric-card advanced-metric-card">
+                          <div className="card-title">{metric.name}</div>
+                          <div className="metric-value">{displayValue}</div> 
+                          <div className="card-subtitle">{metric.description}</div>
+                      </div>
+                  );
+              })}
           </div>
-      )}
-
-       {/* --- Metric Customization Panel --- */}
-       <div className="card mt-5 metric-settings-panel">
-           <h2>Customize Advanced Metrics</h2>
-           <p>Select the advanced metrics you want to display:</p>
-           <div className="metric-checkbox-group">
-               {availableAdvancedMetrics.map(metric => (
-                   <div key={metric.key} className="checkbox-item">
-                       <input
-                           type="checkbox"
-                           id={`metric-${metric.key}`}
-                           checked={selectedAdvancedMetrics.includes(metric.key)}
-                           onChange={(e) => handleMetricToggle(metric.key, e.target.checked)}
-                       />
-                       <label htmlFor={`metric-${metric.key}`}>
-                           <strong>{metric.name}</strong>: {metric.description}
-                       </label>
-                   </div>
-               ))}
-           </div>
-       </div>
-
-      {/* Financial Tips */}
-      <div className="card mt-4">
-        <h2>Personalized Tips</h2>
-        <ul className="tips-list">
-          <li><span className="tip-icon">💡</span><div><h4>Optimize Your Credit Utilization</h4><p>Keeping your utilization below 70% can help maintain financial flexibility.</p></div></li>
-          <li><span className="tip-icon">⏱️</span><div><h4>Early Repayments</h4><p>Repaying advances earlier can improve your repayment score and may qualify you for higher limits.</p></div></li>
-          <li><span className="tip-icon">📊</span><div><h4>Consistent Usage</h4><p>Regular and responsible use of cash advances can help build a stronger financial profile.</p></div></li>
-        </ul>
       </div>
     </div>
   );

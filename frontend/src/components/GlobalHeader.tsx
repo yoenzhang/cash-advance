@@ -21,7 +21,7 @@ const GlobalHeader: React.FC = () => {
     <header className="global-header">
       <div className="global-header-content">
         <div className="logo">
-          <Link to="/">Cash Advance Portal</Link>
+          <Link to="/">Bree Clone</Link>
         </div>
         
         {isAuthenticated && (
