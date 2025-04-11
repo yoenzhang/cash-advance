@@ -199,6 +199,104 @@
   border-radius: 0 4px 4px 0;
 }
 
+/* Smart Reallocation Tips Card Styles */
+.reallocation-content {
+  text-align: left;
+  padding: 0.5rem 0;
+}
+
+.reallocation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.reallocation-item {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #eaeaea;
+  position: relative;
+}
+
+.reallocation-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--dark-color);
+  line-height: 1.4;
+}
+
+.info-tooltip-trigger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+  padding: 0;
+  margin-left: 0.5rem;
+  transition: var(--transition);
+}
+
+.info-tooltip-trigger:hover {
+  color: var(--primary-dark);
+  transform: scale(1.1);
+}
+
+.info-icon {
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.suggestion-tooltip {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  padding: 0.75rem;
+  z-index: 10;
+  border: 1px solid #e0e0e0;
+}
+
+.suggestion-tooltip p {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9rem;
+  color: #555;
+  line-height: 1.5;
+}
+
+.ask-bree-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.ask-bree-button:hover {
+  background-color: var(--primary-dark);
+}
+
+.no-suggestions {
+  margin: 1rem 0;
+  font-style: italic;
+  color: #777;
+  text-align: center;
+}
+
 /* Threshold status styles */
 .threshold-status {
   display: inline-block;

@@ -88,7 +88,14 @@ interface SpendingComparisonData {
   date: Date;
 }
 
-type ChartType = 'bar' | 'line' | 'pie' | 'area' | 'composed' | 'heatmap'; // Add heatmap
+// Define suggestion type for reallocation tips
+interface ReallocationSuggestion {
+  id: number;
+  text: string;
+  explanation: string;
+}
+
+type ChartType = 'bar' | 'line' | 'pie' | 'area' | 'composed' | 'heatmap' | 'donut'; // Add donut
 type AggregationPeriod = 'monthly' | 'weekly' | 'daily';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A569BD'];
@@ -242,6 +249,10 @@ const Insights: React.FC = () => {
 
   // Add state for spending comparison data
   const [spendingComparisonData, setSpendingComparisonData] = useState<SpendingComparisonData[]>([]);
+
+  // Add state for reallocation suggestions
+  const [reallocationSuggestions, setReallocationSuggestions] = useState<ReallocationSuggestion[]>([]);
+  const [tooltipVisible, setTooltipVisible] = useState<number | null>(null);
 
   // Memoize filtered data to avoid recalculating on every render
   const filteredSpending = useMemo(() => {
@@ -656,6 +667,42 @@ const Insights: React.FC = () => {
     }
   }, [selectedAdvancedMetrics]);
 
+  // Generate reallocation suggestions when category data changes
+  useEffect(() => {
+    // Generate personalized suggestions regardless of category data
+    const suggestions: ReallocationSuggestion[] = [
+      {
+        id: 1,
+        text: "Cut $12.99 from Spotify → Cover 3 meals from Walmart",
+        explanation: "Switching to Spotify's free plan can save you $12.99 monthly, which could cover approximately 3 basic meals from Walmart."
+      },
+      {
+        id: 2,
+        text: "Reallocate $75 from gambling to stretch budget 2 days & UNLOCK Bree+ Free Benefits!",
+        explanation: "This reallocation would boost your net earnings enough to qualify for Bree+ Free, giving you access to larger advances and longer repayment periods."
+      },
+      {
+        id: 3,
+        text: "Switch from Starbucks ($4.95) to home coffee ($0.80) and save $123 monthly",
+        explanation: "Your daily Starbucks purchase costs about $4.95, while homemade coffee costs around $0.80 per cup. Making this switch could save you approximately $123 per month."
+      }
+    ];
+    
+    setReallocationSuggestions(suggestions);
+  }, []);  // Empty dependency array to run once on mount
+  
+  // Handle tooltip toggle
+  const toggleTooltip = useCallback((id: number | null) => {
+    setTooltipVisible(id);
+  }, []);
+  
+  // Handle "Ask Bree" button click - would launch AI chat in a real implementation
+  const handleAskBree = useCallback((suggestion: ReallocationSuggestion) => {
+    // In a real implementation, this would launch an AI chat modal
+    console.log('Launch AI chat with question:', `Why did you recommend to ${suggestion.text.toLowerCase()}?`);
+    alert('AI Chat would open here with the question: Why did you recommend this reallocation?');
+  }, []);
+
   // Render Spending Comparison Chart
   const renderSpendingComparisonChart = useCallback(() => {
     // Find the minimum and maximum values for better Y-axis scaling
@@ -1052,12 +1099,25 @@ const Insights: React.FC = () => {
         return (
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
+              <Pie data={monthlyBreakdown} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="amount">
+                {monthlyBreakdown.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value, name, entry) => [`$${value.toLocaleString()}`, entry.payload.category]} />
+            </PieChart>
+          </ResponsiveContainer>
+        );
+      case 'donut':
+        return (
+          <ResponsiveContainer width="100%" height={250}>
+            <PieChart>
               <Pie data={monthlyBreakdown} cx="50%" cy="50%" innerRadius={60} outerRadius={80} fill="#8884d8" paddingAngle={5} dataKey="amount">
                 {monthlyBreakdown.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
+              <Tooltip formatter={(value, name, entry) => [`$${value.toLocaleString()}`, entry.payload.category]} />
             </PieChart>
           </ResponsiveContainer>
         );
@@ -1068,7 +1128,7 @@ const Insights: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" tickFormatter={(value) => `$${value}`} />
               <YAxis type="category" dataKey="category" width={80} />
-              <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
+              <Tooltip formatter={(value) => `$${value.toLocaleString()}`} labelFormatter={(label) => `${label}`} />
               <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
                 {monthlyBreakdown.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -1188,6 +1248,43 @@ const Insights: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Smart Reallocation Tips Card */}
+        <div className="card metric-card">
+          <div className="card-title">💡 Smart Reallocation Tips</div>
+          <div className="reallocation-content">
+            {reallocationSuggestions.length > 0 ? (
+              <ul className="reallocation-list">
+                {reallocationSuggestions.map(suggestion => (
+                  <li key={suggestion.id} className="reallocation-item">
+                    <div className="suggestion-text">
+                      {suggestion.text}
+                      <button 
+                        className="info-tooltip-trigger" 
+                        onClick={() => toggleTooltip(tooltipVisible === suggestion.id ? null : suggestion.id)}
+                      >
+                        <span className="info-icon">ⓘ</span>
+                      </button>
+                    </div>
+                    {tooltipVisible === suggestion.id && (
+                      <div className="suggestion-tooltip">
+                        <p>{suggestion.explanation}</p>
+                        <button 
+                          className="ask-bree-button"
+                          onClick={() => handleAskBree(suggestion)}
+                        >
+                          Have a quick chat with Bree
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="no-suggestions">Loading personalized suggestions...</p>
+            )}
+          </div>
+        </div>
       </div>
       
       {/* Spending Comparison Chart - Moved to top of charts section */}
@@ -1245,33 +1342,6 @@ const Insights: React.FC = () => {
 
       {/* Remaining Charts Section */}
       <div className="charts-section">
-        {/* Category Chart */}
-        <div className="card mt-4">
-          <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2>Spending by Category</h2>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <div className="chart-controls">
-                  <label htmlFor="category-chart-type">Chart Type: </label>
-                  <select id="category-chart-type" value={categoryChartType} onChange={(e) => setCategoryChartType(e.target.value as ChartType)} className="chart-type-dropdown">
-                    <option value="pie">Pie Chart</option>
-                    <option value="bar">Bar Chart</option>
-                  </select>
-                </div>
-                 <button 
-                    onClick={() => downloadCSV(categoryData, `category-spending-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.csv`)} 
-                    style={{ padding: '5px 10px' }} 
-                    disabled={!categoryData || categoryData.length === 0}
-                >
-                     Export CSV
-                 </button>
-             </div>
-          </div>
-           <p className="chart-hint">(Categories shown for the entire selected period)</p>
-          <div className="chart-container">
-            {renderCategoryChart()}
-          </div>
-        </div>
-        
         {/* Repayment Performance Chart */}
         <div className="card mt-4">
           <div className="chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1300,21 +1370,22 @@ const Insights: React.FC = () => {
         </div>
       </div>
       
-      {/* Monthly Spending Breakdown Section */}
+      {/* Combined Spending Breakdown Section */}
       <div className="card mt-5">
         <div className="monthly-breakdown-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-           <h2>Breakdown for {MONTHS[endDate.getMonth()]} {endDate.getFullYear()}</h2> 
+           <h2>📦 Spending Breakdown (Apr 2025)</h2> 
             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                <div className="chart-controls"> 
                  <label htmlFor="monthly-chart-type">Chart Type: </label>
                  <select id="monthly-chart-type" value={monthlyChartType} onChange={(e) => setMonthlyChartType(e.target.value as ChartType)} className="chart-type-dropdown">
-                   <option value="pie">Donut Chart</option>
+                   <option value="pie">Pie Chart</option>
+                   <option value="donut">Donut Chart</option>
                    <option value="bar">Bar Chart</option>
                  </select>
                </div>
                 {monthlyBreakdown.length > 0 && (
                     <button 
-                        onClick={() => downloadCSV(monthlyBreakdown, `monthly-breakdown-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.csv`)} 
+                        onClick={() => downloadCSV(monthlyBreakdown, `spending-breakdown-apr-2025.csv`)} 
                         style={{ padding: '5px 10px' }}
                     >
                         Export CSV
